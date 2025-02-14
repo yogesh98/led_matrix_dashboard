@@ -1,0 +1,2 @@
+Install library - https://github.com/hzeller/rpi-rgb-led-matrix/tree/master
+create venv and install python bindings inside the venv - https://github.com/hzeller/rpi-rgb-led-matrix/tree/master/bindings/python
