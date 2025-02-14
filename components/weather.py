@@ -1,8 +1,6 @@
 from components.basecomponent import BaseComponent
 from rgbmatrix import graphics
 from PIL import Image
-import base64
-from io import BytesIO
 import os
 import requests
 from dotenv import load_dotenv
