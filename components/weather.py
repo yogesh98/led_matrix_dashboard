@@ -24,8 +24,8 @@ class Weather(BaseComponent):
         newCanvas.SetImage(windIcon.convert('RGB'), self.pos_x, self.pos_y + 16)
 
         degreeFont = self.font
-        xoffset_temp = 18
-        xoffset_wind = 18
+        xoffset_temp = 19
+        xoffset_wind = 19
         yoffset_temp = 12
         yoffset_wind = 27
         if self.data['temp'] > 99:

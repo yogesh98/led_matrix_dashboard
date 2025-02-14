@@ -13,7 +13,7 @@ class Date(BaseComponent):
     
     def draw_frame(self, canvas):
         newCanvas = self.clear_area(canvas)
-        graphics.DrawText(newCanvas, self.font, self.pos_x, self.pos_y + 7, self.textColor, self.data['day'])
+        graphics.DrawText(newCanvas, self.font, self.pos_x + 1, self.pos_y + 7, self.textColor, self.data['day'])
         graphics.DrawText(newCanvas, self.font, self.pos_x + 20, self.pos_y + 7, self.textColor, self.data['date'])
         # newCanvas = self.draw_boundary(newCanvas)
         return newCanvas
