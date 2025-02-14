@@ -28,12 +28,12 @@ class MatrixDriver(MatrixBase):
             self.swap_frame()
 
     def queue_swap(self):
-        print(f"Thread {threading.current_thread().name} (PID: {os.getpid()}): queued_swap")
+        # print(f"Thread {threading.current_thread().name} (PID: {os.getpid()}): queued_swap")
         self.queued_swap = True
 
     def swap_frame(self):
         if self.queued_swap:
-            print(f"Thread {threading.current_thread().name} (PID: {os.getpid()}): swapping")
+            # print(f"Thread {threading.current_thread().name} (PID: {os.getpid()}): swapping")
             self.offscreen_canvas = self.matrix.SwapOnVSync(self.offscreen_canvas)
             self.queued_swap = False
 

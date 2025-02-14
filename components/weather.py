@@ -42,7 +42,6 @@ class Weather(BaseComponent):
 
         graphics.DrawText(newCanvas, degreeFont, self.pos_x + xoffset_temp, self.pos_y + yoffset_temp, self.textColor, temp_str)
         graphics.DrawText(newCanvas, degreeFont, self.pos_x + xoffset_wind, self.pos_y + yoffset_wind, self.textColor, wind_speed_str)
-        # newCanvas = self.draw_boundary(newCanvas)
         return newCanvas
     
     def data_eq(self, data, newData):
@@ -62,7 +61,6 @@ class Weather(BaseComponent):
         wind_speed = round(weather_data['wind']['speed'])
         
         data = {'icon': icon, 'temp': temp, 'wind_speed': wind_speed}
-        print(data)
         return data
 
 

@@ -23,7 +23,7 @@ class BaseComponent(object):
         while not self._stop_thread:
             new_data = self.fetch_new_data()
             if(not self.data_eq(self.data, new_data)):
-                print(f"Thread {threading.current_thread().name} (PID: {os.getpid()}):\n\told data: {self.data}\n\tnew data: {new_data}\n")
+                # print(f"Thread {threading.current_thread().name} (PID: {os.getpid()}):\n\told data: {self.data}\n\tnew data: {new_data}\n")
                 self.data = new_data
                 self.data_updated = True
             
