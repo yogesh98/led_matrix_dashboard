@@ -31,18 +31,22 @@ class BaseComponent(object):
 
     def stop(self):
         self._stop_thread = True
-        self._thread.join()
+        # self._thread.join()
 
     def get_frame(self, canvas):
         canvas = self.draw_frame(canvas)
         if self.data_updated:
             self.data_updated = False
             self.swap_frame()
-        
+        if self._stop_thread:
+            canvas.Clear()
+            self.swap_frame()
         # return self.draw_boundary(canvas)
         return canvas
 
-    
+    def refresh_frame(self):
+        self.data_updated = True
+        
     def draw_frame(self, canvas):
         raise Exception("getFrame needs to be overwridden - after the frame is drawn using data make data_updated as False")
     

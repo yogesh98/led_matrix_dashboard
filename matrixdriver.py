@@ -4,28 +4,30 @@ from components.clock import Clock
 # from components.boundary import Boundary
 from components.weather import Weather
 from components.date import Date
-import threading
-import os
+import time
 
 class MatrixDriver(MatrixBase):
     def __init__(self, *args, **kwargs):
         super(MatrixDriver, self).__init__(*args, **kwargs)
         self.offscreen_canvas = self.matrix.CreateFrameCanvas()
         self.queued_swap = True
+        self.keep_alive = True
 
         self.components = [
-            # FontTest(0, 0, self.queue_swap)
-            # Boundary(0, 0, 32, 32, self.queue_swap)
-            Clock(8, 2, self.queue_swap),
-            Date(0, 26, self.queue_swap),
-            Weather(0, 34, self.queue_swap),
+            Clock(8, 1, self.queue_swap),
+            Date(0, 24, self.queue_swap),
+            Weather(32, 0, self.queue_swap),
         ]
 
     def run(self):
-        while True:
-            for component in self.components:
-                self.offscreen_canvas = component.get_frame(self.offscreen_canvas)
-            self.swap_frame()
+        super().run()
+        while self.keep_alive:
+            self.generate_frame()
+    
+    def generate_frame(self):
+        for component in self.components:
+            self.offscreen_canvas = component.get_frame(self.offscreen_canvas)
+        self.swap_frame()
 
     def queue_swap(self):
         # print(f"Thread {threading.current_thread().name} (PID: {os.getpid()}): queued_swap")
@@ -36,9 +38,17 @@ class MatrixDriver(MatrixBase):
             # print(f"Thread {threading.current_thread().name} (PID: {os.getpid()}): swapping")
             self.offscreen_canvas = self.matrix.SwapOnVSync(self.offscreen_canvas)
             self.queued_swap = False
+    
+    def set_brightness(self, value):
+        super().set_brightness(value)
+        for component in self.components:
+            component.refresh_frame()
+        self.queue_swap()
 
-    def clear_frame(self):
-        # for component in self.components:
-        #     component.stop()
-        self.offscreen_canvas.Clear()
-        self.matrix.SwapOnVSync(self.offscreen_canvas)
+    def kill(self):
+        for component in self.components:
+            component.stop()
+        self.keep_alive = False
+        self.matrix.Clear()
+        time.sleep(1)
+

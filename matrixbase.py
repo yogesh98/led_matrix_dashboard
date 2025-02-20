@@ -24,7 +24,7 @@ class MatrixBase(object):
         self.parser.add_argument("--led-slowdown-gpio", action="store", help="Slow down writing to GPIO. Range: 0..4. Default: 4", default=4, type=int)
         self.parser.add_argument("--led-no-hardware-pulse", action="store", help="Don't use hardware pin-pulse generation")
         self.parser.add_argument("--led-rgb-sequence", action="store", help="Switch if your matrix has led colors swapped. Default: RBG", default="RBG", type=str)
-        self.parser.add_argument("--led-pixel-mapper", action="store", help="Apply pixel mappers. e.g \"Rotate:90\"", default="Rotate:90", type=str)
+        self.parser.add_argument("--led-pixel-mapper", action="store", help="Apply pixel mappers. e.g \"Rotate:90\"", default="", type=str)
         self.parser.add_argument("--led-row-addr-type", action="store", help="0 = default; 1=AB-addressed panels; 2=row direct; 3=ABC-addressed panels; 4 = ABC Shift + DE direct", default=0, type=int, choices=[0,1,2,3,4])
         self.parser.add_argument("--led-multiplexing", action="store", help="Multiplexing type: 0=direct; 1=strip; 2=checker; 3=spiral; 4=ZStripe; 5=ZnMirrorZStripe; 6=coreman; 7=Kaler2Scan; 8=ZStripeUneven... (Default: 0)", default=0, type=int)
         self.parser.add_argument("--led-panel-type", action="store", help="Needed to initialize special panels. Supported: 'FM6126A'", default="", type=str)
@@ -32,9 +32,12 @@ class MatrixBase(object):
         self.parser.set_defaults(drop_privileges=True)
 
         self.args = self.parser.parse_args()
+        
+        options = self.get_matrix_options()
+        self.matrix = RGBMatrix(options = options)
 
+    def get_matrix_options(self):
         options = RGBMatrixOptions()
-
         if self.args.led_gpio_mapping != None:
             options.hardware_mapping = self.args.led_gpio_mapping
         options.rows = self.args.led_rows
@@ -60,14 +63,16 @@ class MatrixBase(object):
             options.disable_hardware_pulsing = True
         if not self.args.drop_privileges:
             options.drop_privileges=False
-
-        self.matrix = RGBMatrix(options = options)
+        return options
 
     def run(self):
         print("running")
 
     def usleep(self, value):
         time.sleep(value / 1000000.0)
+
+    def set_brightness(self, value):
+        self.matrix.brightness = value
 
     def process(self):
         print("Press CTRL-C to stop")

@@ -48,6 +48,7 @@ class Weather(BaseComponent):
         return data['icon'] == newData['icon'] and data['temp'] == newData['temp'] and data['wind_speed'] == newData['wind_speed']
     
     def fetch_new_data(self):
+        print("Fetching weather data")
         api_key = os.getenv('OPENWEATHERMAP_API_KEY')
         lat = os.getenv('LAT')
         lon = os.getenv('LON')
