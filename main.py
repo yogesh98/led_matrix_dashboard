@@ -38,14 +38,18 @@ def brightness():
 
 @app.route('/brightness/increment', methods=['POST'])
 def brightness_increment():
-    if driver.matrix.brightness != 100:
-        driver.set_brightness(driver.matrix.brightness + 1)
+    new_brightness = driver.matrix.brightness + 10
+    if new_brightness > 100:
+        new_brightness = 100
+    driver.set_brightness(new_brightness)
     return str(driver.matrix.brightness)
 
 @app.route('/brightness/decrement', methods=['POST'])
 def brightness_decrement():
-    if driver.matrix.brightness != 0:
-        driver.set_brightness(driver.matrix.brightness - 1)
+    new_brightness = driver.matrix.brightness - 10
+    if new_brightness < 0:
+        new_brightness = 0
+    driver.set_brightness(new_brightness)
     return str(driver.matrix.brightness)
 
 @app.route('/hello', methods=['GET'])

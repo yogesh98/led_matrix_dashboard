@@ -9,7 +9,7 @@ load_dotenv()
 
 class Weather(BaseComponent):
     def __init__(self, pos_x, pos_y, swap_frame):
-        super().__init__(pos_x, pos_y, 32, 32, swap_frame, 600)
+        super().__init__(pos_x, pos_y, 32, 32, swap_frame, 900)
         self.font = graphics.Font()
         self.font.LoadFont("fonts/6x10.bdf")
         self.degreeFont = graphics.Font()
