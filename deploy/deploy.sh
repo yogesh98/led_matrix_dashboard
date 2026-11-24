@@ -14,7 +14,6 @@
 # Logs from the timer: journalctl -u led-deploy
 
 set -euo pipefail
-PATH=$PATH:/usr/sbin:/sbin   # runuser lives here; not on every user's PATH
 
 BRANCH=main
 PROGRAM=led_matrix_dashboard                 # supervisor program name
@@ -24,8 +23,9 @@ SCRATCH=""
 
 log() { echo "[$(date '+%F %T')] $*"; }
 
-# git, pip and the checks run as whoever owns the checkout, so nothing in it ends up owned by root
-as_owner() { runuser -u "$OWNER" -- env HOME="$OWNER_HOME" "$@"; }
+# git, pip and the checks run as whoever owns the checkout, so nothing in it ends up owned by root.
+# (setpriv rather than runuser: runuser logs a login session to the journal on every call)
+as_owner() { setpriv --reuid="$OWNER" --regid="$OWNER_GID" --init-groups env HOME="$OWNER_HOME" "$@"; }
 
 fail() {
     as_owner git config deploy.failedcommit "$1"   # don't retry this commit every 2 minutes
@@ -71,6 +71,7 @@ main() {
 
     REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
     OWNER=$(stat -c %U "$REPO")
+    OWNER_GID=$(id -g "$OWNER")
     OWNER_HOME=$(getent passwd "$OWNER" | cut -d: -f6)
     PY=$REPO/.venv/bin/python
     cd "$REPO"
