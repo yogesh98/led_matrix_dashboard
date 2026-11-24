@@ -5,3 +5,5 @@ pillow == 11.1.0
 RPi.GPIO == 0.7.1
 rpi-lgpio == 0.6
 flask == 3.1.0
+# LED driver, built from an exact upstream commit. Update it with deploy/pin-driver.sh
+rgbmatrix @ git+https://github.com/hzeller/rpi-rgb-led-matrix@a8dd6854580b7e2b18d0f697cec94415dd8824cd

@@ -2,10 +2,12 @@
 # Continuous deployment for the LED matrix dashboard. Runs on the Pi itself.
 #
 # Each run checks GitHub for new commits on main. If there is one, it:
-#   1. tests it in a scratch copy: everything compiles, main.py imports, and
+#   1. installs its requirements.txt into a venv of its own (if it changed), while the
+#      app keeps running on the current one. This is where a newly pinned LED driver is built.
+#   2. tests it in a scratch copy: everything compiles, main.py imports, and
 #      unit tests in tests/ pass (if that folder exists)
-#   2. fast-forwards this checkout to it and restarts the app under supervisor
-#   3. checks the app comes back up healthy, and rolls back if it doesn't
+#   3. fast-forwards this checkout to it, points .venv at its venv and restarts the app
+#   4. checks the app comes back up healthy, and rolls back the code and the venv if it doesn't
 # A commit that fails is skipped until something newer is pushed (or --force).
 #
 # install.sh sets up a systemd timer that runs this every 2 minutes. By hand:
@@ -21,12 +23,6 @@ HEALTH_URL=http://127.0.0.1:5000/health
 HEALTH_TIMEOUT=${HEALTH_TIMEOUT:-60}         # seconds to wait for the app to come up
 SCRATCH=""
 
-log() { echo "[$(date '+%F %T')] $*"; }
-
-# git, pip and the checks run as whoever owns the checkout, so nothing in it ends up owned by root.
-# (setpriv rather than runuser: runuser logs a login session to the journal on every call)
-as_owner() { setpriv --reuid="$OWNER" --regid="$OWNER_GID" --init-groups env HOME="$OWNER_HOME" "$@"; }
-
 fail() {
     as_owner git config deploy.failedcommit "$1"   # don't retry this commit every 2 minutes
     log "$2"
@@ -34,18 +30,14 @@ fail() {
 }
 
 run_checks() {
-    local dir=$1 current=$2 target=$3
-    if ! as_owner git diff --quiet "$current" "$target" -- requirements.txt; then
-        log "requirements.txt changed; installing"
-        as_owner "$REPO/.venv/bin/pip" install --quiet -r "$dir/requirements.txt" || return 1
-    fi
+    local dir=$1 py=$2
     log "Check: everything compiles"
-    as_owner "$PY" -m compileall -q "$dir" || return 1
+    as_owner "$py" -m compileall -q "$dir" || return 1
     log "Check: main.py imports"
-    as_owner env -C "$dir" "$PY" -c "import main" || return 1
+    as_owner env -C "$dir" "$py" -c "import main" || return 1
     if [[ -d $dir/tests ]]; then
         log "Check: unit tests"
-        as_owner env -C "$dir" "$PY" -m unittest discover -s tests -t . || return 1
+        as_owner env -C "$dir" "$py" -m unittest discover -s tests -t . || return 1
     fi
 }
 
@@ -69,14 +61,11 @@ main() {
         exit 1
     fi
 
-    REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-    OWNER=$(stat -c %U "$REPO")
-    OWNER_GID=$(id -g "$OWNER")
-    OWNER_HOME=$(getent passwd "$OWNER" | cut -d: -f6)
-    PY=$REPO/.venv/bin/python
+    REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
+    source "$REPO/deploy/common.sh"   # log, as_owner and the venv helpers
     cd "$REPO"
 
-    # Only one deploy at a time (the timer and a manual run could overlap)
+    # Only one deploy at a time (the timer, a manual run and install.sh could overlap)
     exec 9>/run/led-deploy.lock
     flock -n 9 || { log "Another deploy is already running"; exit 0; }
 
@@ -111,21 +100,35 @@ main() {
     trap 'rm -rf "$SCRATCH"' EXIT
     chown "$OWNER" "$SCRATCH"
     as_owner git archive "$target" | as_owner tar -x -C "$SCRATCH"
-    if ! run_checks "$SCRATCH" "$current" "$target"; then
+
+    adopt_handmade_venv
+    local old_venv new_venv
+    old_venv=$(current_venv)
+    new_venv=$(venv_for "$SCRATCH/requirements.txt")
+    if ! build_venv "$new_venv" "$SCRATCH/requirements.txt"; then
+        fail "$target" "Couldn't install requirements.txt for ${target:0:7}; not deploying it"
+    fi
+    if ! run_checks "$SCRATCH" "$new_venv/bin/python"; then
         fail "$target" "Checks failed for ${target:0:7}; not deploying it"
     fi
 
     log "Deploying ${target:0:7} (was ${current:0:7})"
     as_owner git merge --ff-only --quiet "$target"
+    use_venv "$new_venv"
     supervisorctl restart "$PROGRAM" >/dev/null || true   # wait_healthy decides if it worked
     if wait_healthy; then
         as_owner git config --unset deploy.failedcommit || true
+        # Keep the previous venv too, in case you want to go back by hand
+        prune_venvs "$new_venv" "$old_venv"
         log "Deployed ${target:0:7}"
         exit 0
     fi
 
     log "App didn't come up healthy; rolling back to ${current:0:7}"
     as_owner git reset --hard --quiet "$current"
+    if [[ -n $old_venv && $old_venv != "$new_venv" ]]; then
+        use_venv "$old_venv"
+    fi
     supervisorctl restart "$PROGRAM" >/dev/null || true
     if wait_healthy; then
         log "Rolled back; app is healthy again"
