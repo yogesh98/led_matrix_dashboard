@@ -54,7 +54,17 @@ class Weather(BaseComponent):
         lon = os.getenv('LON')
         url = f"http://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={api_key}&units=imperial"
         
-        response = requests.get(url)
+        try:
+            # Without a timeout, a connection that drops mid-request can block this thread forever
+            response = requests.get(url, timeout=10)
+        except requests.RequestException as e:
+            # requests includes the full URL in its errors; keep the API key out of the logs
+            message = str(e).replace(api_key, "<api key>") if api_key else str(e)
+            raise RuntimeError(f"weather request failed: {message}") from None
+
+        if response.status_code != 200:
+            # e.g. 429 rate limit or 5xx; the body is a short JSON error from OpenWeatherMap
+            raise RuntimeError(f"OpenWeatherMap returned HTTP {response.status_code}: {response.text[:200]}")
         weather_data = response.json()
         
         icon = weather_data['weather'][0]['icon']

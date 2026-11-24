@@ -3,30 +3,47 @@ import time
 import os
 
 class BaseComponent(object):
+    # After a failed fetch, try again after this many seconds (or sleep_interval, if shorter)
+    retry_interval = 60
+
     def __init__(self, pos_x, pos_y, size_x, size_y, swap_frame, sleep_interval = 1):
         self.pos_x = pos_x
         self.pos_y = pos_y
         self.size_x = size_x - 1
         self.size_y = size_y - 1
         self.swap_frame = swap_frame
-        self.data_updated = False
-        self.data = None
-        self.data = self.fetch_new_data()
         self.sleep_interval = sleep_interval
+        self.data_updated = False
+        # None if the first fetch failed (e.g. network not up yet at boot); the loop below keeps trying
+        self.data = self._try_fetch()
 
         # Start a background thread that periodically updates self.data.
         self._stop_thread = False
         self._thread = threading.Thread(target=self._update_data_loop, daemon=True)
         self._thread.start()
-    
+
+    def _try_fetch(self):
+        # An uncaught error here used to end the update thread for good, freezing the
+        # component on its last value until restart. Log it and return None instead.
+        try:
+            return self.fetch_new_data()
+        except Exception as e:
+            print(f"{type(self).__name__}: fetch failed: {type(e).__name__}: {e}", flush=True)
+            return None
+
     def _update_data_loop(self):
         while not self._stop_thread:
-            new_data = self.fetch_new_data()
-            if(not self.data_eq(self.data, new_data)):
+            new_data = self._try_fetch()
+            if new_data is None:
+                # Keep showing the last good data and retry sooner than the normal interval
+                time.sleep(min(self.sleep_interval, self.retry_interval))
+                continue
+
+            if self.data is None or not self.data_eq(self.data, new_data):
                 # print(f"Thread {threading.current_thread().name} (PID: {os.getpid()}):\n\told data: {self.data}\n\tnew data: {new_data}\n")
                 self.data = new_data
                 self.data_updated = True
-            
+
             time.sleep(self.sleep_interval)
 
     def stop(self):
@@ -34,7 +51,11 @@ class BaseComponent(object):
         # self._thread.join()
 
     def get_frame(self, canvas):
-        canvas = self.draw_frame(canvas)
+        if self.data is None:
+            # Nothing fetched yet: leave this area blank rather than crash the render loop
+            canvas = self.clear_area(canvas)
+        else:
+            canvas = self.draw_frame(canvas)
         if self.data_updated:
             self.data_updated = False
             self.swap_frame()
