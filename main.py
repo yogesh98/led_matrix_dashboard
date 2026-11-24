@@ -56,6 +56,13 @@ def brightness_decrement():
 def hello():
     return str(driver.matrix.brightness)
 
+# Used by deploy/deploy.sh to check the display loop is actually running after a deploy
+@app.route('/health', methods=['GET'])
+def health():
+    if matrix_driver_thread is not None and matrix_driver_thread.is_alive():
+        return 'ok'
+    return 'matrix driver thread is not running', 503
+
 def run_matrix_driver():
     driver.process()
 

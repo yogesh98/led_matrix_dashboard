@@ -2,6 +2,7 @@ import argparse
 import time
 import sys
 import os
+import pwd
 
 # sys.path.append(os.path.abspath(os.path.dirname(__file__) + '/..'))
 from rgbmatrix import RGBMatrix, RGBMatrixOptions
@@ -32,9 +33,28 @@ class MatrixBase(object):
         self.parser.set_defaults(drop_privileges=True)
 
         self.args = self.parser.parse_args()
-        
+
         options = self.get_matrix_options()
         self.matrix = RGBMatrix(options = options)
+        if self.args.drop_privileges:
+            self.drop_privileges()
+
+    def drop_privileges(self):
+        # Running as root lets the LED library set up precise timing (without it the
+        # library warns "not running as root ... Expect color degradation"). Root isn't
+        # needed once the matrix is running, so switch to the user who owns this project.
+        # The library's own privilege drop always switches to "daemon", which can't read
+        # the fonts/icons under a private home folder like /home/yogesh, so it's off.
+        if os.geteuid() != 0:
+            return
+        owner = pwd.getpwuid(os.stat(os.path.dirname(os.path.abspath(__file__))).st_uid)
+        if owner.pw_uid == 0:
+            return
+        os.setgroups(os.getgrouplist(owner.pw_name, owner.pw_gid))
+        os.setgid(owner.pw_gid)
+        os.setuid(owner.pw_uid)
+        os.environ.update(HOME=owner.pw_dir, USER=owner.pw_name, LOGNAME=owner.pw_name)
+        print(f"LED matrix set up as root; now running as {owner.pw_name}")
 
     def get_matrix_options(self):
         options = RGBMatrixOptions()
@@ -61,8 +81,8 @@ class MatrixBase(object):
             options.gpio_slowdown = self.args.led_slowdown_gpio
         if self.args.led_no_hardware_pulse:
             options.disable_hardware_pulsing = True
-        if not self.args.drop_privileges:
-            options.drop_privileges=False
+        # Never let the library switch to "daemon"; drop_privileges() above handles it
+        options.drop_privileges = False
         return options
 
     def run(self):
