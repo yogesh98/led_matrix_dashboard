@@ -17,7 +17,7 @@ _REPLACEMENT = 0xFFFD  # the driver draws this for characters a font doesn't hav
 
 
 class Glyph:
-    __slots__ = ('advance', 'width', 'height', 'x_offset', 'y_offset', 'rows', '_mask')
+    __slots__ = ('advance', 'width', 'height', 'x_offset', 'y_offset', 'rows', '_mask', '_ink')
 
     def __init__(self, advance, width, height, x_offset, y_offset, rows):
         self.advance = advance
@@ -27,6 +27,7 @@ class Glyph:
         self.y_offset = y_offset
         self.rows = rows  # one (bits, bit count) per row, left-aligned like the BDF hex
         self._mask = None
+        self._ink = False  # not measured yet; None once measured if it lights nothing
 
     def mask(self):
         """The glyph's pixels as an 'L' image (255 = lit), or None if it has none"""
@@ -38,6 +39,19 @@ class Glyph:
                         data[y * self.width + x] = 255
             self._mask = Image.frombytes('L', (self.width, self.height), bytes(data))
         return self._mask
+
+    def ink(self, baseline):
+        """(left, top, right, bottom): the pixels it lights, counted from where it's drawn (x) and
+        the top of its line, for a font with that baseline. None if it lights nothing."""
+        if self._ink is False:
+            mask = self.mask()
+            box = mask.getbbox() if mask is not None else None
+            self._ink = None if box is None else (self.x_offset + box[0], box[1] - self.height - self.y_offset,
+                                                  self.x_offset + box[2] - 1, box[3] - 1 - self.height - self.y_offset)
+        if self._ink is None:
+            return None
+        left, top, right, bottom = self._ink
+        return left, top + baseline, right, bottom + baseline
 
 
 class Font:
@@ -108,28 +122,40 @@ class Font:
             x += g.advance
         return x - start
 
+    def glyph_ink(self, char):
+        """What glyph.ink says for this character: (left, top, right, bottom) or None"""
+        g = self.glyph(char)
+        return g.ink(self.baseline) if g is not None else None
+
+    def ink_box(self, text):
+        """(left, top, right, bottom): the pixels `text` lights when drawn with draw(image, 0, 0, ...),
+        or None if it lights none. Characters leave blank columns beside them and blank rows above
+        and below, so this is what lines text up by what you see rather than by its characters."""
+        box = None
+        x = 0
+        for char in text:
+            g = self.glyph(char)
+            if g is None:
+                continue
+            ink = g.ink(self.baseline)
+            if ink is not None:
+                left, top, right, bottom = ink
+                ink = (x + left, top, x + right, bottom)
+                box = ink if box is None else (min(box[0], ink[0]), min(box[1], ink[1]),
+                                               max(box[2], ink[2]), max(box[3], ink[3]))
+            x += g.advance
+        return box
+
     def ink_rows(self, chars):
         """(first, last): the rows, counted from the top of the line, that any of `chars` lights.
         Components use it to size their boxes to the pixels they can actually light."""
         if chars not in self._ink_rows:
-            self._ink_rows[chars] = self._find_ink_rows(chars)
+            inks = [ink for ink in map(self.glyph_ink, set(chars)) if ink is not None]
+            if inks:
+                self._ink_rows[chars] = min(i[1] for i in inks), max(i[3] for i in inks)
+            else:
+                self._ink_rows[chars] = 0, max(self.height, 1) - 1
         return self._ink_rows[chars]
-
-    def _find_ink_rows(self, chars):
-        first = last = None
-        for char in set(chars):
-            g = self.glyph(char)
-            mask = g.mask() if g is not None else None
-            box = mask.getbbox() if mask is not None else None
-            if box is None:
-                continue
-            glyph_top = self.baseline - g.height - g.y_offset
-            top, bottom = glyph_top + box[1], glyph_top + box[3] - 1
-            first = top if first is None else min(first, top)
-            last = bottom if last is None else max(last, bottom)
-        if first is None:
-            return 0, max(self.height, 1) - 1
-        return first, last
 
 
 _fonts = {}

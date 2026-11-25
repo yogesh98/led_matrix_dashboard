@@ -286,6 +286,45 @@ button:focus-visible, input:focus-visible, select:focus-visible, .palette-item:f
 .switch input:checked + span::after { transform: translateX(14px); }
 .switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+/* Where a component sits in its box: a grid of nine (or a row or column of three) */
+.align-row { display: flex; align-items: center; gap: 12px; }
+.align-grid {
+  display: grid;
+  flex: none;
+  gap: 2px;
+  padding: 3px;
+  background: #0d0f11;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+.align-cell {
+  display: flex;
+  width: 22px;
+  height: 22px;
+  padding: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+}
+.align-cell[data-align='left'] { justify-content: flex-start; }
+.align-cell[data-align='center'] { justify-content: center; }
+.align-cell[data-align='right'] { justify-content: flex-end; }
+.align-cell[data-valign='top'] { align-items: flex-start; }
+.align-cell[data-valign='middle'] { align-items: center; }
+.align-cell[data-valign='bottom'] { align-items: flex-end; }
+.align-cell i { width: 8px; height: 4px; border-radius: 1px; background: var(--faint); }
+.align-cell:hover { background: #22262b; }
+.align-cell:hover i { background: var(--text); }
+.align-cell.current { background: var(--accent-soft); }
+.align-cell.current i { width: 10px; height: 6px; background: var(--accent); }
+.align-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.align-name { font-size: 13px; font-weight: 500; }
+.align-hint { font-size: 11.5px; line-height: 1.35; color: var(--faint); }
+
+.place-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.place-group { display: inline-flex; gap: 4px; }
+
 .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
 .actions .btn { height: 30px; padding: 0 10px; }
 

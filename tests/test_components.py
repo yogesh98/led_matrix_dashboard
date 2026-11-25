@@ -134,11 +134,11 @@ class TemperatureTest(unittest.TestCase):
         self.assertEqual(lit(self.draw(104)), lit(render_widget(widget('text', text='104°', font='6x10'), context())[0]))
 
     def test_align(self):
-        import bdf
-        left, right = self.draw(72), self.draw(72, align='right')
-        spare = right.width - bdf.get_font('6x10').text_width('72°')  # room left over in the box
-        self.assertEqual(left.getchannel('A').getbbox()[0], 0)
-        self.assertEqual(right.getchannel('A').getbbox()[0], spare)
+        # Lined up by the pixels it lights: the degree sign ends right at the box's edge
+        for temp in (5, 72, -12, 104):
+            left, right = self.draw(temp), self.draw(temp, align='right')
+            self.assertEqual(left.getchannel('A').getbbox()[0], 0)
+            self.assertEqual(right.getchannel('A').getbbox()[2], right.width)
 
     def test_blank_on_the_display_until_it_loads(self):
         image, _ = render_widget(weather(show='temperature'), context(now=NOW, weather=None))

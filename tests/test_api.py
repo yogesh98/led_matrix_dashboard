@@ -53,7 +53,7 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(data['display'], {'width': 64, 'height': 32})
         self.assertEqual(data['config'], self.driver.layout.config)
         clock = next(c for c in data['components'] if c['type'] == 'clock')
-        self.assertEqual((clock['thumbnail']['w'], clock['thumbnail']['h']), (16, 21))
+        self.assertEqual((clock['thumbnail']['w'], clock['thumbnail']['h']), (15, 21))
         self.assertIn('8x13B', data['fonts'])
         scene = next(c for c in data['components'] if c['type'] == 'scene')
         self.assertTrue(scene['background'])

@@ -1,7 +1,8 @@
 import calendar
 
 import bdf
-from components.base import Component, Option, color_option, font_option, line_rows, outline_option, rgba
+from components.base import (Component, Option, align_options, color_option, draw_lines, font_option, line_rows,
+                             outline_option, rgba)
 
 # Each format is a list of parts, drawn left to right with `gap` pixels between them
 FORMATS = {
@@ -49,6 +50,7 @@ class Date(Component):
             ('numeric', '11/24'),
         ]),
         Option('gap', 'Gap', 'number', 1, min=0, max=16, unit='px'),
+        *align_options(),
         outline_option(),
     )
 
@@ -56,25 +58,29 @@ class Date(Component):
         self._slots = {}
 
     def _layout(self, opts):
+        """Each part gets a slot as wide as its widest text, so the parts don't shift around as
+        the days go by. The box spans the pixels the widest date can light."""
         font = bdf.get_font(opts['font'])
         parts = FORMATS[opts['format']]
         key = (font.name, opts['format'])
         if key not in self._slots:  # measuring every possible date is slow enough to do once
             values = {part: part_values(part) for part in parts}
             slots = [max(font.text_width(v) for v in values[part]) for part in parts]
-            self._slots[key] = slots, line_rows(font, ''.join(''.join(v) for v in values.values()))
-        slots, (top, height) = self._slots[key]
-        width = sum(slots) + opts['gap'] * (len(parts) - 1)
-        return font, parts, slots, top, height, width
+            inks = [[b for b in map(font.ink_box, values[part]) if b] for part in parts]
+            reach = [(min(b[0] for b in boxes), max(b[2] for b in boxes)) for boxes in inks]
+            rows = line_rows(font, ''.join(''.join(v) for v in values.values()))
+            self._slots[key] = slots, reach, rows
+        slots, reach, (top, height) = self._slots[key]
+        starts = [sum(slots[:i]) + opts['gap'] * i for i in range(len(parts))]
+        left = min(start + r[0] for start, r in zip(starts, reach))
+        right = max(start + r[1] for start, r in zip(starts, reach))
+        return font, parts, starts, top, height, right - left + 1
 
     def size(self, opts, ctx):
-        font, parts, slots, top, height, width = self._layout(opts)
+        font, parts, starts, top, height, width = self._layout(opts)
         return width, height
 
     def draw(self, image, opts, ctx):
-        font, parts, slots, top, height, width = self._layout(opts)
-        color = rgba(opts['color'])
-        x = 0
-        for part, slot in zip(parts, slots):
-            font.draw(image, x, -top, part_text(part, ctx.now), color)
-            x += slot + opts['gap']
+        font, parts, starts, top, height, width = self._layout(opts)
+        runs = [(start, part_text(part, ctx.now)) for part, start in zip(parts, starts)]
+        draw_lines(image, font, [(runs, -top)], rgba(opts['color']), opts['align'], opts['valign'])

@@ -121,6 +121,7 @@ function travel(from, to) {
   state.screenId = findScreen(step.screenId) ? step.screenId : screens()[0].id;
   state.selectedId = findWidget(step.selectedId) ? step.selectedId : null;
   history.key = null;
+  anchors.clear(); // the step already has every widget where it was
   changed({ sprites: true });
 }
 const undo = () => travel(history.undo, history.redo);
@@ -203,6 +204,7 @@ async function refreshSprites() {
     if (sprite && sprite.hash && sprite.pixels) known[w.id] = sprite.hash;
   }
   const request = ++spriteRequest;
+  const sent = new Map([...anchors].map(([id, anchor]) => [id, anchor.edit]));
   try {
     const { sprites } = await api.render(widgets, known);
     if (request !== spriteRequest) return; // a newer request is on its way
@@ -211,8 +213,17 @@ async function refreshSprites() {
       const before = state.sprites.get(id);
       storeSprite(id, sprite);
       const after = state.sprites.get(id);
+      const anchor = anchors.get(id);
+      const widget = findAnywhere(id);
+      if (anchor && sent.has(id) && widget && !drag.active) {
+        moved = keepAlignedSide(widget, anchor) || moved;
+        // Edits since this request was sent are measured from here
+        if (anchor.edit === sent.get(id)) anchors.delete(id);
+        else [anchor.w, anchor.h] = widgetSize(widget);
+      }
       if (before && before.w && after.w && (before.w !== after.w || before.h !== after.h)) moved = keepOnDisplay(id) || moved;
     }
+    for (const id of anchors.keys()) if (!findAnywhere(id)) anchors.delete(id);
     // Part of the change that resized it, so it needs no undo step of its own
     if (moved) scheduleSave();
     const ids = new Set(widgets.map(w => w.id));
@@ -243,6 +254,54 @@ function keepOnDisplay(id) {
     return true;
   }
   return false;
+}
+
+// ---------- Keeping the aligned side in place ----------
+
+// When an edit in the inspector changes a box's size (a bigger font, a longer label), the side
+// the component is aligned to stays where it was: a right-aligned temperature grows to the left.
+// The server measures the new size, so the size from before the edit is kept until it has.
+const anchors = new Map(); // widget id -> {w, h, edit}
+let edits = 0;
+
+function findAnywhere(id) {
+  for (const screen of screens()) {
+    const widget = screen.widgets.find(w => w.id === id);
+    if (widget) return widget;
+  }
+  return null;
+}
+
+// The widget's align and valign, if the inspector shows them (null if not)
+function alignment(widget) {
+  const component = state.catalog.get(widget.type);
+  const shown = key => {
+    const option = component.options.find(o => o.key === key);
+    return option && matches(option.show_if, widget.options) ? widget.options[key] : null;
+  };
+  return { align: shown('align'), valign: shown('valign') };
+}
+
+// Call before an edit that may change the widget's size
+function rememberSize(widget) {
+  if (!anchors.has(widget.id)) {
+    const [w, h] = widgetSize(widget);
+    anchors.set(widget.id, { w, h });
+  }
+  anchors.get(widget.id).edit = ++edits;
+}
+
+// Moves a widget so its aligned side is where it was when it was `before` in size. Returns whether it moved.
+function keepAlignedSide(widget, before) {
+  const [w, h] = widgetSize(widget);
+  const { align, valign } = alignment(widget);
+  const offset = (side, far, near, grew) => (side === far ? grew : side === near ? Math.round(grew / 2) : 0);
+  const dx = offset(align, 'right', 'center', before.w - w);
+  const dy = offset(valign, 'bottom', 'middle', before.h - h);
+  if (!dx && !dy) return false;
+  widget.x += dx;
+  widget.y += dy;
+  return true;
 }
 
 // ---------- Actions ----------
@@ -312,11 +371,16 @@ function restack(id, delta) {
   });
 }
 
-function centerWidget(id, axis) {
+// Moves a widget's box to an edge or the middle of the display: left, center, right, top, middle or bottom
+function placeWidget(id, side) {
   updateWidget(id, w => {
     const [width, height] = widgetSize(w);
-    if (axis === 'x') w.x = Math.round((state.W - width) / 2);
-    else w.y = Math.round((state.H - height) / 2);
+    if (side === 'left') w.x = 0;
+    else if (side === 'center') w.x = Math.round((state.W - width) / 2);
+    else if (side === 'right') w.x = state.W - width;
+    else if (side === 'top') w.y = 0;
+    else if (side === 'middle') w.y = Math.round((state.H - height) / 2);
+    else if (side === 'bottom') w.y = state.H - height;
   }, { inspector: false });
 }
 
@@ -776,6 +840,7 @@ function optionField(widget, option) {
   };
   // Changes that can show or hide other fields rebuild the panel
   const write = (value, rebuild = false) => updateWidget(id, w => {
+    rememberSize(w);
     w.options[option.key] = value;
     // If this sets the box's size (e.g. turning on scrolling), keep the box on the display
     if (canResize(w)) {
@@ -831,6 +896,52 @@ function optionField(widget, option) {
     default:
       return null;
   }
+}
+
+const SIDE_NAMES = { left: 'Left', center: 'Center', right: 'Right', top: 'Top', middle: 'Middle', bottom: 'Bottom' };
+
+// "Top right", "Bottom", "Left", "Center"...
+function alignmentName(align, valign) {
+  if (!valign || valign === 'middle') return SIDE_NAMES[align || valign];
+  if (!align || align === 'center') return SIDE_NAMES[valign];
+  return `${SIDE_NAMES[valign]} ${align}`;
+}
+
+// The align and valign options as one grid: where what's showing sits in its box. Either can be
+// missing (scrolling text only lines up top to bottom), which leaves a row or column of three.
+function alignField(widget, horizontal, vertical) {
+  const id = widget.id;
+  const read = key => {
+    const w = findWidget(id);
+    return w ? w.options[key] : undefined;
+  };
+  const columns = horizontal ? horizontal.choices.map(c => c.value) : [null];
+  const rows = vertical ? vertical.choices.map(c => c.value) : [null];
+  const cells = rows.flatMap(valign => columns.map(align => {
+    const name = alignmentName(align, valign);
+    const current = () => (!align || read('align') === align) && (!valign || read('valign') === valign);
+    const cell = h('button', {
+      type: 'button',
+      class: 'align-cell',
+      title: name,
+      'aria-label': name,
+      dataset: { align: align || 'center', valign: valign || 'middle' },
+      onclick: () => updateWidget(id, w => {
+        rememberSize(w);
+        if (align) w.options.align = align;
+        if (valign) w.options.valign = valign;
+      }, { key: `align:${id}`, sprites: true, inspector: false }),
+    }, h('i'));
+    return bind(cell, () => cls('align-cell', current() && 'current'), 'className');
+  }));
+  const grid = h('div', { class: 'align-grid', style: { gridTemplateColumns: `repeat(${columns.length}, 22px)` } }, ...cells);
+  const label = bind(h('span', { class: 'align-name' }),
+    () => alignmentName(horizontal && read('align'), vertical && read('valign')), 'textContent');
+  return h('div', { class: 'field' },
+    h('span', { class: 'field-label' }, 'Align'),
+    h('div', { class: 'align-row' }, grid,
+      h('span', { class: 'align-text' }, label,
+        h('span', { class: 'align-hint' }, 'in its box, by the LEDs it lights. It’s also the side that stays put when the box changes size.'))));
 }
 
 // ---------- Images ----------
@@ -978,6 +1089,16 @@ function widgetInspector(widget) {
     }, { key: `position:${id}`, inspector: false }),
   });
 
+  const place = (side, iconName, title) =>
+    h('button', { type: 'button', class: 'icon-btn', title, 'aria-label': title, onclick: () => placeWidget(id, side) }, icon(iconName));
+  const shown = component.options.filter(o => matches(o.show_if, widget.options));
+  const horizontal = shown.find(o => o.type === 'align');
+  const vertical = shown.find(o => o.type === 'valign');
+  const fieldFor = o => {
+    if (o.type === 'align' || (o.type === 'valign' && !horizontal)) return alignField(widget, horizontal, vertical);
+    return o.type === 'valign' ? null : optionField(widget, o);
+  };
+
   return [
     h('div', { class: 'panel-head' },
       h('h2', {}, component.label),
@@ -986,7 +1107,14 @@ function widgetInspector(widget) {
     h('div', { class: 'field-row' },
       field('X', position('x')),
       field('Y', position('y'))),
-    ...component.options.filter(o => matches(o.show_if, widget.options)).map(o => optionField(widget, o)),
+    !component.background && h('div', { class: 'field' },
+      h('span', { class: 'field-label' }, 'Move to the display’s'),
+      h('div', { class: 'place-row' },
+        h('span', { class: 'place-group' },
+          place('left', 'toLeft', 'Left edge'), place('center', 'centerX', 'Center'), place('right', 'toRight', 'Right edge')),
+        h('span', { class: 'place-group' },
+          place('top', 'toTop', 'Top edge'), place('middle', 'centerY', 'Middle'), place('bottom', 'toBottom', 'Bottom edge')))),
+    ...shown.map(fieldFor),
     h('p', { class: 'note', id: 'inspector-note', hidden: true }),
     h('div', { class: 'actions' },
       actionButton('Forward', 'forward', () => restack(id, 1), { disabled: index === widgets.length - 1, title: 'Bring forward ( ] )' }),
@@ -1325,8 +1453,8 @@ function widgetMenu(id, x, y) {
     { label: 'Send backward', icon: 'backward', shortcut: '[', disabled: bottom, action: () => restack(id, -1) },
     { label: 'Send to back', icon: 'back', shortcut: `${SHIFT}[`, disabled: bottom, action: () => restack(id, -Infinity) },
     '-',
-    { label: 'Center horizontally', icon: 'centerX', action: () => centerWidget(id, 'x') },
-    { label: 'Center vertically', icon: 'centerY', action: () => centerWidget(id, 'y') },
+    { label: 'Center horizontally', icon: 'centerX', action: () => placeWidget(id, 'center') },
+    { label: 'Center vertically', icon: 'centerY', action: () => placeWidget(id, 'middle') },
     { label: widget.hidden ? 'Show' : 'Hide', icon: widget.hidden ? 'eye' : 'eyeOff', shortcut: 'H', action: () => toggleHidden(id) },
     '-',
     { label: 'Delete', icon: 'trash', shortcut: DELETE_KEY, danger: true, action: () => deleteWidget(id) },

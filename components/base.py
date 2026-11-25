@@ -9,6 +9,7 @@ To add a component: subclass Component in a module in this folder, describe its
 settings in `options`, and add it to COMPONENTS in components/__init__.py. The
 management page builds its settings form from `options`, so it needs no changes.
 """
+import functools
 import re
 from datetime import date, datetime
 
@@ -21,9 +22,10 @@ ASCII = ''.join(chr(c) for c in range(32, 127))
 class Option:
     """One setting of a component, shown as a field on the management page.
 
-    kind is one of: text, number, bool, color, font, select, date (YYYY-MM-DD), time (HH:MM)
-    or image (an id from images.py). `show_if` hides the field unless other options have the
-    given values: {'scroll': True}, a list of allowed values, or a prefix ending in *.
+    kind is one of: text, number, bool, color, font, select, date (YYYY-MM-DD), time (HH:MM),
+    image (an id from images.py), or align and valign (see align_options). `show_if` hides the
+    field unless other options have the given values: {'scroll': True}, a list of allowed values,
+    or a prefix ending in *.
     """
 
     def __init__(self, key, label, kind, default, choices=None, min=None, max=None,
@@ -62,7 +64,7 @@ class Option:
             return normalize_color(value) or self.default
         if kind == 'font':
             return value if value in bdf.available_fonts() else self.default
-        if kind == 'select':
+        if kind in ('select', 'align', 'valign'):
             return value if value in [c[0] for c in self.choices] else self.default
         if kind == 'date':
             try:
@@ -104,6 +106,20 @@ def outline_option():
 
 def hours_option():
     return Option('hours', 'Hours', 'select', '12', choices=[('12', '12-hour'), ('24', '24-hour')])
+
+
+def align_options(align='left', valign='top', align_if=None, valign_if=None):
+    """Where what's showing sits in its box: left, center or right, and top, middle or bottom.
+    Boxes are sized for the biggest thing a component can show, and things line up by the
+    pixels they light, so right-aligned text ends exactly at the box's right edge. In the editor
+    it's also the side that stays put when the box changes size (a bigger font, a longer label).
+    The management page shows the two together as one grid. Draw with draw_lines or draw_labeled."""
+    return (
+        Option('align', 'Align', 'align', align, choices=[('left', 'Left'), ('center', 'Center'), ('right', 'Right')],
+               show_if=align_if),
+        Option('valign', 'Align vertically', 'valign', valign,
+               choices=[('top', 'Top'), ('middle', 'Middle'), ('bottom', 'Bottom')], show_if=valign_if),
+    )
 
 
 def normalize_color(value):
@@ -188,3 +204,114 @@ def line_rows(font, charset):
 def widest_digits(font, sample):
     """sample with each 0 swapped for the font's widest digit, to size a box for any number"""
     return sample.replace('0', max('0123456789', key=font.text_width))
+
+
+DIGITS = '0123456789'
+
+
+def ink_width(font, text):
+    """How many columns text spans from the first one it lights to the last"""
+    box = font.ink_box(text)
+    return box[2] - box[0] + 1 if box else 0
+
+
+def _positions(sample):
+    """'[12]0:' -> ['12', '0123456789', ':']: the characters that can be in each place"""
+    positions = []
+    i = 0
+    while i < len(sample):
+        if sample[i] == '[':
+            end = sample.index(']', i)
+            positions.append(sample[i + 1:end])
+            i = end + 1
+        else:
+            positions.append(DIGITS if sample[i] == '0' else sample[i])
+            i += 1
+    return positions
+
+
+def sample_chars(*samples):
+    """Every character the samples (as for widest) can show, e.g. to size a box's rows"""
+    return ''.join(''.join(_positions(sample)) for sample in samples)
+
+
+@functools.lru_cache(maxsize=1024)
+def widest(font, *samples):
+    """The most columns any text the samples stand for can span, from the first one it lights to
+    the last. In a sample, 0 stands for any digit and [123] for any one of those characters, so
+    '1[012]:[012345]0' is 10:00 to 12:59. A box this wide fits anything a component can show,
+    with nothing to spare when it shows the widest (in a font whose characters are all as wide)."""
+    most = 0
+    for sample in samples:
+        pen = 0
+        left = right = None
+        for options in _positions(sample):
+            for option in options:
+                ink = font.glyph_ink(option)
+                if ink is not None:
+                    left = pen + ink[0] if left is None else min(left, pen + ink[0])
+                    right = pen + ink[2] if right is None else max(right, pen + ink[2])
+            pen += max(font.text_width(c) for c in options)
+        if left is not None:
+            most = max(most, right - left + 1)
+    return most
+
+
+def shift(size, first, last, side):
+    """How far to move something that lights pixels first..last so it sits at `side` (left, top,
+    center, middle, right or bottom) of a box `size` pixels across"""
+    if side in ('left', 'top'):
+        return -first
+    if side in ('right', 'bottom'):
+        return size - 1 - last
+    return (size - (last - first + 1)) // 2 - first
+
+
+def draw_lines(image, font, lines, color, align, valign, hidden=''):
+    """Draws lines of text lined up by the pixels they light: each line on its own to the `align`
+    side of the image, and all of them together to the `valign` side, keeping the space between
+    them. `lines` is [(text, top)], top being the row the line starts on before lining up. A line
+    can also be [(x, text), ...] runs, which move together. Characters in `hidden` keep their
+    place but aren't drawn (a blinking colon)."""
+    placed = []
+    for runs, top in lines:
+        if isinstance(runs, str):
+            runs = [(0, runs)]
+        boxes = [(x + b[0], top + b[1], x + b[2], top + b[3])
+                 for x, b in ((x, font.ink_box(text)) for x, text in runs) if b]
+        if boxes:
+            placed.append((runs, top, boxes))
+    if not placed:
+        return
+    every = [b for _, _, boxes in placed for b in boxes]
+    dy = shift(image.height, min(b[1] for b in every), max(b[3] for b in every), valign)
+    for runs, top, boxes in placed:
+        dx = shift(image.width, min(b[0] for b in boxes), max(b[2] for b in boxes), align)
+        for x, text in runs:
+            font.draw(image, x + dx, top + dy, text, color, hidden)
+
+
+def labeled_width(font, label, value_width):
+    """The width of a box for draw_labeled, where the widest value spans value_width columns"""
+    box = font.ink_box(label)
+    if box is None:
+        return value_width
+    return font.text_width(label) - box[0] + value_width
+
+
+def draw_labeled(image, font, label, value, color, align, valign):
+    """Draws a label and a value on one line: the label at the left, so it doesn't move about,
+    and the value lined up in the space after it. Both go to the `valign` side together."""
+    label_box = font.ink_box(label)
+    value_box = font.ink_box(value)
+    boxes = [b for b in (label_box, value_box) if b]
+    if not boxes:
+        return
+    dy = shift(image.height, min(b[1] for b in boxes), max(b[3] for b in boxes), valign)
+    start = 0
+    if label_box:
+        font.draw(image, -label_box[0], dy, label, color)
+        start = font.text_width(label) - label_box[0]
+    if value_box:
+        dx = start + shift(image.width - start, value_box[0], value_box[2], align)
+        font.draw(image, dx, dy, value, color)

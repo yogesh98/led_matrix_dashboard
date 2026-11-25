@@ -50,7 +50,7 @@ PREBUILT = [
         'widgets': [
             {'type': 'scene', 'x': 0, 'y': 0, 'options': {'theme': 'skogafoss'}},
             {'type': 'clock', 'x': 1, 'y': 1, 'options': {'font': '8x13B', 'color': '#ffffff', 'outline': True}},
-            {'type': 'weather', 'x': 37, 'y': 20,
+            {'type': 'weather', 'x': 37, 'y': 21,
              'options': {'show': 'temperature', 'align': 'right', 'font': '6x10', 'color': '#c8f0ff', 'outline': True}},
         ],
     },

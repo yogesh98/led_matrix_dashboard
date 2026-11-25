@@ -1,8 +1,8 @@
 from datetime import date, datetime, time
 
 import bdf
-from components.base import (ASCII, Component, Option, color_option, font_option, line_rows, outline_option, rgba,
-                             widest_digits)
+from components.base import (ASCII, Component, Option, align_options, color_option, draw_labeled, draw_lines,
+                             font_option, ink_width, labeled_width, line_rows, outline_option, rgba, widest)
 
 NEXT_NEW_YEAR = date(date.today().year + 1, 1, 1).isoformat()
 
@@ -51,6 +51,7 @@ class Countdown(Component):
         Option('layout', 'Layout', 'select', 'stacked', choices=[('stacked', 'Label above'), ('inline', 'One line')]),
         color_option(),
         font_option('6x10'),
+        *align_options(),
         outline_option(),
     )
 
@@ -58,15 +59,14 @@ class Countdown(Component):
         font = bdf.get_font(opts['font'])
         extra = ''.join(sorted(set(opts['label'] + opts['done']) - set(ASCII)))
         top, height = line_rows(font, ASCII + extra)
-        values = [widest_digits(font, s) for s in SAMPLES[opts['format']]] + [opts['done']]
-        value_width = max(font.text_width(v) for v in values)
+        value_width = max(widest(font, *SAMPLES[opts['format']]), ink_width(font, opts['done']))
         label = opts['label']
         if not label:
             width, lines = value_width, 1
         elif opts['layout'] == 'stacked':
-            width, lines = max(font.text_width(label), value_width), 2
+            width, lines = max(ink_width(font, label), value_width), 2
         else:
-            width, lines = font.text_width(label + ' ') + value_width, 1
+            width, lines = labeled_width(font, label + ' ', value_width), 1
         return font, top, height, max(1, width), lines
 
     def size(self, opts, ctx):
@@ -78,11 +78,10 @@ class Countdown(Component):
         value = time_left(opts, ctx.now) or opts['done']
         color = rgba(opts['color'])
         label = opts['label']
+        align, valign = opts['align'], opts['valign']
         if not label:
-            font.draw(image, 0, -top, value, color)
+            draw_lines(image, font, [(value, -top)], color, align, valign)
         elif lines == 2:
-            font.draw(image, 0, -top, label, color)
-            font.draw(image, 0, height + 1 - top, value, color)
+            draw_lines(image, font, [(label, -top), (value, height + 1 - top)], color, align, valign)
         else:
-            x = font.draw(image, 0, -top, label + ' ', color)
-            font.draw(image, x, -top, value, color)
+            draw_labeled(image, font, label + ' ', value, color, align, valign)

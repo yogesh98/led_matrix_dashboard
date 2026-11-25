@@ -9,7 +9,8 @@ import calendar
 from datetime import datetime, timedelta
 
 import bdf
-from components.base import ASCII, Component, Option, color_option, line_rows, outline_option, rgba, widest_digits
+from components.base import (Component, Option, align_options, color_option, draw_labeled, labeled_width, line_rows,
+                             outline_option, rgba, sample_chars, widest, widest_digits)
 from components.openweathermap import compass, data_or_sample, icon, today_high_low
 
 ICONS = ['both', 'temp']  # the original look: the weather icon with the temperature (and wind)
@@ -30,9 +31,17 @@ SHOW = [
 ]
 LABELS = {'temperature': 'Temp', 'feels_like': 'Feels', 'high_low': 'H/L', 'humidity': 'Hum', 'wind': 'Wind',
           'sunrise': 'Rise', 'sunset': 'Set'}
-# The widest each value gets, so the box doesn't change size with the weather
-SAMPLES = {'temperature': '-00°', 'feels_like': '-00°', 'high_low': '00°/00°', 'humidity': '100%', 'wind': '00 NW',
-           'sunrise': '00:00', 'sunset': '00:00'}
+# The widest each value gets, so the box doesn't change size with the weather. Each 0 is any
+# digit and [12] is a 1 or a 2 (see base.widest).
+DIRECTIONS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+SAMPLES = {
+    'temperature': ['-00°', '100°'],
+    'feels_like': ['-00°', '100°'],
+    'high_low': ['00°/00°'],
+    'humidity': ['00%', '100%'],
+    'wind': [f"00 {d}" for d in DIRECTIONS],
+}
+CLOCK_SAMPLES = {'12': ['0:[012345]0', '1[012]:[012345]0'], '24': ['[012]0:[012345]0']}  # for sunrise and sunset
 ICON_SIZE = 16
 GAP = 2  # between forecast columns
 
@@ -50,8 +59,6 @@ class Weather(Component):
     options = (
         Option('show', 'Show', 'select', 'both', choices=SHOW),
         Option('label', 'Label', 'bool', False, show_if={'show': VALUES}),
-        Option('align', 'Align', 'select', 'left', choices=[('left', 'Left'), ('right', 'Right')],
-               show_if={'show': VALUES}),
         Option('hours', 'Hours', 'select', '12', choices=[('12', '12-hour'), ('24', '24-hour')],
                show_if={'show': ['sunrise', 'sunset', 'forecast_hours']}),
         Option('count', 'Columns', 'number', 3, min=1, max=5, show_if={'show': FORECASTS}),
@@ -65,6 +72,7 @@ class Weather(Component):
         # that's far too big or small for the other.
         Option('font', 'Font', 'font', 'auto', show_if={'show': VALUES}),
         Option('forecast_font', 'Font', 'font', 'auto', show_if={'show': FORECASTS}),
+        *align_options(align_if={'show': VALUES}, valign_if={'show': VALUES}),
         outline_option(),
     )
 
@@ -131,9 +139,12 @@ class Weather(Component):
 
     def _value_layout(self, opts):
         font = self.font(opts)
-        label = LABELS[opts['show']] + ' ' if opts['label'] else ''
-        top, height = line_rows(font, ASCII + '°')
-        width = font.text_width(label) + font.text_width(widest_digits(font, SAMPLES[opts['show']]))
+        show = opts['show']
+        label = LABELS[show] + ' ' if opts['label'] else ''
+        samples = CLOCK_SAMPLES[opts['hours']] if show in ('sunrise', 'sunset') else SAMPLES[show]
+        # The rows anything it can show lights, so the box is no taller than the value can be
+        top, height = line_rows(font, label + sample_chars(*samples))
+        width = labeled_width(font, label, widest(font, *samples))
         return font, label, top, height, width
 
     def value(self, show, weather, forecast, ctx, hours):
@@ -169,11 +180,7 @@ class Weather(Component):
         value = self.value(opts['show'], weather, forecast, ctx, opts['hours'])
         if value is None:
             return note
-        color = rgba(opts['color'])
-        x = font.draw(image, 0, -top, label, color)
-        if opts['align'] == 'right':
-            x = width - font.text_width(value)
-        font.draw(image, x, -top, value, color)
+        draw_labeled(image, font, label, value, rgba(opts['color']), opts['align'], opts['valign'])
         return note
 
     # ---------- Forecast: columns of day or time, icon and temperature ----------

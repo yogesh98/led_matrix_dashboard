@@ -1,7 +1,6 @@
 import bdf
-from components.base import Component, Option, color_option, font_option, hours_option, line_rows, outline_option, rgba
-
-DIGITS = '0123456789'
+from components.base import (DIGITS, Component, Option, align_options, color_option, draw_lines, font_option,
+                             hours_option, line_rows, outline_option, rgba, widest)
 
 
 def hour_text(now, hours, pad):
@@ -9,10 +8,6 @@ def hour_text(now, hours, pad):
     if hours == '12':
         hour = hour % 12 or 12
     return f"{hour:02}" if pad else str(hour)
-
-
-def digit_width(font):
-    return max(font.text_width(d) for d in DIGITS)
 
 
 class Clock(Component):
@@ -24,6 +19,9 @@ class Clock(Component):
         font_option('8x13B'),
         hours_option(),
         Option('spacing', 'Line spacing', 'number', 1, min=0, max=16, unit='px'),
+        # Right by default: digits end on the same column (a 1 is narrower on its left), so they
+        # stay stacked in columns as the time changes
+        *align_options(align='right'),
         outline_option(),
     )
 
@@ -34,13 +32,14 @@ class Clock(Component):
 
     def size(self, opts, ctx):
         font, top, height = self._layout(opts)
-        return 2 * digit_width(font), 2 * height + opts['spacing']
+        hours = '[01]0' if opts['hours'] == '12' else '[012]0'
+        return widest(font, hours, '[012345]0'), 2 * height + opts['spacing']
 
     def draw(self, image, opts, ctx):
         font, top, height = self._layout(opts)
-        color = rgba(opts['color'])
-        font.draw(image, 0, -top, hour_text(ctx.now, opts['hours'], pad=True), color)
-        font.draw(image, 0, height + opts['spacing'] - top, f"{ctx.now.minute:02}", color)
+        lines = [(hour_text(ctx.now, opts['hours'], pad=True), -top),
+                 (f"{ctx.now.minute:02}", height + opts['spacing'] - top)]
+        draw_lines(image, font, lines, rgba(opts['color']), opts['align'], opts['valign'])
 
 
 class Time(Component):
@@ -53,15 +52,17 @@ class Time(Component):
         hours_option(),
         Option('seconds', 'Show seconds', 'bool', False),
         Option('blink', 'Blink the colon', 'bool', False),
+        *align_options(),
         outline_option(),
     )
 
     def _layout(self, opts):
         font = bdf.get_font(opts['font'])
         top, height = line_rows(font, DIGITS + ':')
-        digits, colons = (6, 2) if opts['seconds'] else (4, 1)
-        width = digits * digit_width(font) + colons * font.text_width(':')
-        return font, top, height, width
+        # 12-hour times drop the leading zero ("9:41"), and only 10 to 12 have two digits
+        samples = ('0', '1[012]') if opts['hours'] == '12' else ('[012]0',)
+        samples = tuple(s + ':[012345]0' * (2 if opts['seconds'] else 1) for s in samples)
+        return font, top, height, widest(font, *samples)
 
     def size(self, opts, ctx):
         font, top, height, width = self._layout(opts)
@@ -70,9 +71,8 @@ class Time(Component):
     def draw(self, image, opts, ctx):
         font, top, height, width = self._layout(opts)
         now = ctx.now
-        # 12-hour times drop the leading zero ("9:41"), so right-align to keep the minutes still
         text = f"{hour_text(now, opts['hours'], pad=opts['hours'] == '24')}:{now.minute:02}"
         if opts['seconds']:
             text += f":{now.second:02}"
         hidden = ':' if opts['blink'] and now.second % 2 else ''
-        font.draw(image, width - font.text_width(text), -top, text, rgba(opts['color']), hidden)
+        draw_lines(image, font, [(text, -top)], rgba(opts['color']), opts['align'], opts['valign'], hidden)
