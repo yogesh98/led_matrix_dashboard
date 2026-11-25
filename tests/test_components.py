@@ -57,6 +57,10 @@ class CountdownTest(unittest.TestCase):
         self.assertLess(two.width, one.width)
 
 
+def weather(**options):
+    return widget('weather', **options)
+
+
 class ForecastTest(unittest.TestCase):
     def forecast(self):
         today = NOW.date()
@@ -67,17 +71,17 @@ class ForecastTest(unittest.TestCase):
                        'temp': 60 + h, 'icon': '10n'} for h in (-1, 2, 5, 8, 11)],
         }
 
-    def render(self, weather=None, **options):
-        ctx = context(now=NOW, weather=weather)
-        ctx.sources['forecast'] = FakeSource(self.forecast())
-        w = widget('forecast', **options)
+    def render(self, weather_data=None, show='forecast_days', **options):
         from components import COMPONENTS
-        return COMPONENTS['forecast'].columns(w['options'], self.forecast(), ctx), render_widget(w, ctx)[0]
+        ctx = context(now=NOW, weather=weather_data)
+        ctx.sources['forecast'] = FakeSource(self.forecast())
+        w = weather(show=show, **options)
+        return COMPONENTS['weather'].forecast_columns(w['options'], self.forecast(), ctx), render_widget(w, ctx)[0]
 
     def test_days(self):
         columns, image = self.render()
         self.assertEqual(columns, [('Tue', '01d', '70/50'), ('Wed', '01d', '71/51'), ('Thu', '01d', '72/52')])
-        self.assertEqual(image.width, 64)
+        self.assertEqual(image.width, 64)  # the automatic font is small enough for three columns
         self.assertLessEqual(image.height, 32)
         self.assertGreater(lit(image), 0)
 
@@ -86,18 +90,18 @@ class ForecastTest(unittest.TestCase):
         self.assertEqual(columns, [('Wed', '01d', '71°'), ('Thu', '01d', '72°')])
 
     def test_today_includes_temperatures_seen_earlier(self):
-        weather = {'temp': 65, 'observed': {'date': NOW.date().isoformat(), 'high': 80, 'low': 40}}
-        columns, _ = self.render(weather=weather, count=1)
+        weather_data = {'temp': 65, 'observed': {'date': NOW.date().isoformat(), 'high': 80, 'low': 40}}
+        columns, _ = self.render(weather_data=weather_data, count=1)
         self.assertEqual(columns[0][2], '80/40')
 
     def test_hours(self):
-        columns, _ = self.render(mode='hours')
+        columns, _ = self.render(show='forecast_hours')
         self.assertEqual([c[0] for c in columns], ['11a', '2p', '5p'])  # skips the hour already gone
-        columns, _ = self.render(mode='hours', hours='24', count=1)
+        columns, _ = self.render(show='forecast_hours', hours='24', count=1)
         self.assertEqual(columns[0][0], '11:00')
 
     def test_blank_on_the_display_until_it_loads(self):
-        image, note = render_widget(widget('forecast'), context(now=NOW))
+        image, note = render_widget(weather(show='forecast_days'), context(now=NOW))
         self.assertEqual(lit(image), 0)
 
     def test_summarize_openweathermap(self):
@@ -114,20 +118,47 @@ class ForecastTest(unittest.TestCase):
         self.assertEqual(summary['hours'][1]['hour'], 3)
 
 
-class WeatherDetailsTest(unittest.TestCase):
+class TemperatureTest(unittest.TestCase):
+    def draw(self, temp, **options):
+        w = weather(show='temperature', **options)
+        return render_widget(w, context(now=NOW, weather={'icon': '01d', 'temp': temp}))[0]
+
+    def test_draws_just_the_temperature(self):
+        seventy_two, _ = render_widget(widget('text', text='72°', font='6x10'), context())
+        self.assertEqual(lit(self.draw(72)), lit(seventy_two))
+
+    def test_box_fits_three_digits_and_negatives_without_changing_size(self):
+        sizes = {self.draw(t).size for t in (5, 72, 104, -12)}
+        self.assertEqual(len(sizes), 1)
+        self.assertLessEqual(sizes.pop()[0], 64)
+        self.assertEqual(lit(self.draw(104)), lit(render_widget(widget('text', text='104°', font='6x10'), context())[0]))
+
+    def test_align(self):
+        import bdf
+        left, right = self.draw(72), self.draw(72, align='right')
+        spare = right.width - bdf.get_font('6x10').text_width('72°')  # room left over in the box
+        self.assertEqual(left.getchannel('A').getbbox()[0], 0)
+        self.assertEqual(right.getchannel('A').getbbox()[0], spare)
+
+    def test_blank_on_the_display_until_it_loads(self):
+        image, _ = render_widget(weather(show='temperature'), context(now=NOW, weather=None))
+        self.assertEqual(lit(image), 0)
+
+
+class WeatherValuesTest(unittest.TestCase):
     WEATHER = {
-        'temp': 64, 'feels_like': 61, 'humidity': 82, 'wind_speed': 12, 'wind_deg': 300,
+        'icon': '01d', 'temp': 64, 'feels_like': 61, 'humidity': 82, 'wind_speed': 12, 'wind_deg': 300,
         'sunrise': datetime(2026, 11, 24, 6, 52).timestamp(), 'sunset': datetime(2026, 11, 24, 17, 1).timestamp(),
         'observed': {'date': '2026-11-24', 'high': 66, 'low': 48},
     }
 
-    def value(self, field, **options):
+    def value(self, show, hours='12'):
         from components import COMPONENTS
         ctx = context(now=NOW, weather=self.WEATHER)
-        return COMPONENTS['weather_details'].value(field, self.WEATHER, None, ctx, options.get('hours', '12'))
+        return COMPONENTS['weather'].value(show, self.WEATHER, None, ctx, hours)
 
     def test_values(self):
-        self.assertEqual(self.value('temp'), '64°')
+        self.assertEqual(self.value('temperature'), '64°')
         self.assertEqual(self.value('feels_like'), '61°')
         self.assertEqual(self.value('humidity'), '82%')
         self.assertEqual(self.value('high_low'), '66°/48°')
@@ -136,16 +167,32 @@ class WeatherDetailsTest(unittest.TestCase):
         self.assertEqual(self.value('sunset', hours='24'), '17:01')
         self.assertEqual(self.value('wind'), '12 NW')
 
-    def test_every_field_fits_the_display(self):
-        for field in ('temp', 'feels_like', 'humidity', 'high_low', 'sunrise', 'sunset', 'wind'):
-            image, _ = render_widget(widget('weather_details', field=field), context(now=NOW, weather=self.WEATHER))
-            self.assertLessEqual(image.width, 64, field)
-            self.assertGreater(lit(image), 0, field)
+    def test_everything_it_can_show_fits_the_display(self):
+        from components.weather import SHOW
+        for show, _ in SHOW:
+            for label in (False, True):
+                ctx = context(now=NOW, weather=self.WEATHER, preview=True)
+                image, _ = render_widget(weather(show=show, label=label), ctx)
+                self.assertLessEqual(image.width, 64, show)
+                self.assertLessEqual(image.height, 32, show)
+                self.assertGreater(lit(image), 0, show)
 
-    def test_without_a_label_it_is_narrower(self):
-        with_label, _ = render_widget(widget('weather_details'), context(now=NOW, weather=self.WEATHER))
-        without, _ = render_widget(widget('weather_details', label=False), context(now=NOW, weather=self.WEATHER))
-        self.assertLess(without.width, with_label.width)
+    def test_label(self):
+        plain, _ = render_widget(weather(show='feels_like'), context(now=NOW, weather=self.WEATHER))
+        labeled, _ = render_widget(weather(show='feels_like', label=True), context(now=NOW, weather=self.WEATHER))
+        self.assertGreater(labeled.width, plain.width)
+        self.assertGreater(lit(labeled), lit(plain))
+
+    def test_automatic_font_suits_what_it_shows(self):
+        from components import COMPONENTS
+        font = lambda **o: COMPONENTS['weather'].font(weather(**o)['options']).name
+        self.assertEqual(font(show='temperature'), '6x10')
+        self.assertEqual(font(show='humidity'), '5x7')
+        self.assertEqual(font(show='forecast_hours'), '4x6')
+        self.assertEqual(font(show='temperature', font='8x13B'), '8x13B')
+        # A font picked for a value doesn't carry over to the forecast, and the other way round
+        self.assertEqual(font(show='forecast_days', font='8x13B'), '4x6')
+        self.assertEqual(font(show='humidity', forecast_font='6x10'), '5x7')
 
 
 class OptionTest(unittest.TestCase):

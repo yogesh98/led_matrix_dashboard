@@ -4,17 +4,15 @@ from components.box import Box
 from components.clock import Clock, Time
 from components.countdown import Countdown
 from components.date import Date
-from components.forecast import Forecast
 from components.image import Image
 from components.scene import Scene
 from components.text import Text
-from components.weather import Weather, WeatherDetails
+from components.weather import Weather
 
 # In the order the management page lists them
 COMPONENTS = {c.type: c for c in (
     Clock(), Time(), Date(), Countdown(),
-    Weather(), WeatherDetails(), Forecast(),
-    Text(), Image(), Box(), Scene(),
+    Weather(), Text(), Image(), Box(), Scene(),
 )}
 
 

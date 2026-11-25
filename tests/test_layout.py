@@ -143,3 +143,50 @@ class RotationTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class UpgradeTest(unittest.TestCase):
+    """Layouts saved when weather details and the forecast were components of their own"""
+
+    def test_weather_details_become_the_weather_component(self):
+        old = {'id': 'w1', 'type': 'weather_details', 'x': 43, 'y': 20,
+               'options': {'field': 'humidity', 'label': False, 'font': '6x10', 'color': '#c8f0ff', 'outline': True}}
+        widget = normalize(layout({'widgets': [old]}))['screens'][0]['widgets'][0]
+        self.assertEqual(widget['type'], 'weather')
+        self.assertEqual({k: widget['options'][k] for k in ('show', 'label', 'font', 'color', 'outline', 'align')},
+                         {'show': 'humidity', 'label': False, 'font': '6x10', 'color': '#c8f0ff', 'outline': True,
+                          'align': 'right'})
+        self.assertEqual((widget['x'], widget['y']), (43, 20))
+
+    def test_temperature_lights_the_same_leds_as_before(self):
+        from renderer import render_screen
+        from tests.helpers import context
+        old = {'type': 'weather_details', 'x': 43, 'y': 20,
+               'options': {'field': 'temp', 'label': False, 'font': '6x10', 'outline': True}}
+        # What the old component drew: the value right-aligned in a box as wide as "00°"
+        before = {'type': 'text', 'x': 43, 'y': 20, 'options': {'text': '72°', 'font': '6x10', 'outline': True}}
+        ctx = context(weather={'icon': '01d', 'temp': 72})
+        upgraded = normalize(layout({'widgets': [old]}))['screens'][0]
+        expected = normalize(layout({'widgets': [before]}))['screens'][0]
+        self.assertEqual(upgraded['widgets'][0]['options']['show'], 'temperature')
+        self.assertEqual(render_screen(upgraded, ctx).tobytes(), render_screen(expected, ctx).tobytes())
+
+    def test_forecast_becomes_the_weather_component(self):
+        old = {'type': 'forecast', 'x': 0, 'y': 1,
+               'options': {'mode': 'hours', 'count': 4, 'hours': '24', 'color': '#ffd60a'}}
+        widget = normalize(layout({'widgets': [old]}))['screens'][0]['widgets'][0]
+        self.assertEqual(widget['type'], 'weather')
+        self.assertEqual({k: widget['options'][k] for k in ('show', 'count', 'hours', 'color', 'forecast_font')},
+                         {'show': 'forecast_hours', 'count': 4, 'hours': '24', 'color': '#ffd60a', 'forecast_font': '4x6'})
+
+    def test_saved_file_is_upgraded_not_dropped(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, 'display.json')
+            with open(path, 'w') as f:
+                json.dump(layout({'name': 'Old', 'widgets': [
+                    {'type': 'forecast', 'options': {'mode': 'days'}},
+                    {'type': 'weather_details', 'options': {'field': 'sunset'}},
+                ]}), f)
+            widgets = LayoutStore(path).config['screens'][0]['widgets']
+        self.assertEqual([(w['type'], w['options']['show']) for w in widgets],
+                         [('weather', 'forecast_days'), ('weather', 'sunset')])

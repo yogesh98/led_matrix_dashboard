@@ -61,6 +61,15 @@ def frame_json(frame):
     return {'w': frame.width, 'h': frame.height, 'rgb': base64.b64encode(frame.tobytes()).decode('ascii')}
 
 
+@bp.get('/prebuilt')
+def prebuilt():
+    """Each prebuilt screen drawn as it looks right now, for the new-screen picker's live
+    previews (with sample weather until the real weather has loaded)"""
+    ctx = driver().context(preview=True)
+    return jsonify(screens=[{'id': screen['id'], 'frame': frame_json(render_screen(screen, ctx))}
+                            for screen in prebuilt_screens()])
+
+
 @bp.put('/config')
 def save_config():
     try:
@@ -175,11 +184,12 @@ def delete_image(image_id):
 
 
 class _QuietPolling(logging.Filter):
-    """The page polls /api/live and /api/render several times a second; keep those out of the log"""
+    """The page polls /api/live and /api/render several times a second (and /api/prebuilt while
+    the new-screen picker is open); keep those out of the log"""
 
     def filter(self, record):
         message = record.getMessage()
-        return '/api/live' not in message and '/api/render' not in message
+        return not any(path in message for path in ('/api/live', '/api/render', '/api/prebuilt'))
 
 
 def quiet_polling_logs():

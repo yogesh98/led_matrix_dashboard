@@ -39,6 +39,7 @@ export const api = {
   saveConfig: (config, options) => request('PUT', '/api/config', config, options),
   render: (widgets, known) => request('POST', '/api/render', { widgets, known }),
   live: () => request('GET', '/api/live'),
+  prebuilt: () => request('GET', '/api/prebuilt'),
   show: screenId => request('POST', '/api/show', { screen_id: screenId }),
   brightness: value => request('PUT', '/api/brightness', { value }),
   images: () => request('GET', '/api/images'),

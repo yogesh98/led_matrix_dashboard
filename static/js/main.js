@@ -49,6 +49,9 @@ function canResize(widget) {
   return Boolean(component.resize && matches(component.resize_when, widget.options));
 }
 
+// The dark outline draws a pixel outside the text on every side (see renderer.outlined)
+const outlinePad = widget => (widget.options.outline === true ? 2 : 0);
+
 // A widget's box in LEDs. The server measures it when drawing the sprite; boxes you can
 // resize take their size straight from their options so the handle feels instant.
 function widgetSize(widget) {
@@ -57,8 +60,8 @@ function widgetSize(widget) {
   let width = sprite && sprite.w ? sprite.w : component.thumbnail.w;
   let height = sprite && sprite.h ? sprite.h : component.thumbnail.h;
   if (canResize(widget)) {
-    if (component.resize.w) width = widget.options[component.resize.w];
-    if (component.resize.h) height = widget.options[component.resize.h];
+    if (component.resize.w) width = widget.options[component.resize.w] + outlinePad(widget);
+    if (component.resize.h) height = widget.options[component.resize.h] + outlinePad(widget);
   }
   return [width, height];
 }
@@ -380,18 +383,83 @@ function addScreen(prebuilt = null) {
   }, { sprites: Boolean(prebuilt) });
 }
 
-function addScreenMenu() {
-  const rect = $('#add-screen').getBoundingClientRect();
-  openMenu(rect.left, rect.bottom + 6, [
-    { label: 'Blank screen', icon: 'plus', action: () => addScreen() },
-    ...(state.prebuilt.length ? ['-', { heading: 'Prebuilt' }] : []),
-    ...state.prebuilt.map(prebuilt => {
-      const { w, h: hgt, rgb } = prebuilt.thumbnail;
-      const preview = h('canvas');
-      drawLeds(preview, decodeBase64(rgb), w, hgt, Math.max(1, Math.min(2, Math.floor(128 / w))), { off: null });
-      return { label: prebuilt.name, detail: prebuilt.description, preview, action: () => addScreen(prebuilt) };
-    }),
-  ]);
+// ---------- New screen picker ----------
+//
+// The + next to Screens opens it: start from a blank screen, or pick a prebuilt one. The
+// prebuilt previews are live, redrawn by the server several times a second while it's open,
+// so they follow the time and the weather just as they will on the display.
+
+const picker = { canvases: new Map(), timer: null, busy: false };
+
+function drawPickerFrame(canvas, frame) {
+  drawLeds(canvas, decodeBase64(frame.rgb), frame.w, frame.h, 5, { background: '#060708' });
+}
+
+function openNewScreen() {
+  const dialog = $('#new-screen');
+  const choose = prebuilt => {
+    dialog.close();
+    addScreen(prebuilt);
+  };
+  picker.canvases.clear();
+  const card = prebuilt => {
+    const canvas = h('canvas', { 'aria-hidden': 'true' });
+    drawPickerFrame(canvas, prebuilt.thumbnail);
+    picker.canvases.set(prebuilt.id, canvas);
+    return h('button', { type: 'button', class: 'picker-card', onclick: () => choose(prebuilt) },
+      h('span', { class: 'picker-art' }, canvas),
+      h('span', { class: 'picker-name' }, prebuilt.name),
+      h('span', { class: 'picker-desc' }, prebuilt.description));
+  };
+  dialog.replaceChildren(h('div', { class: 'picker-body' },
+    h('div', { class: 'picker-head' },
+      h('h2', { id: 'new-screen-title' }, 'New screen'),
+      h('button', { type: 'button', class: 'icon-btn', title: 'Close (Esc)', onclick: () => dialog.close() }, icon('x'))),
+    h('button', { type: 'button', class: 'picker-blank', onclick: () => choose(null) },
+      h('span', { class: 'picker-blank-art' }, icon('plus')),
+      h('span', { class: 'picker-text' },
+        h('span', { class: 'picker-name' }, 'Blank screen'),
+        h('span', { class: 'picker-desc' }, 'Start empty and add components yourself'))),
+    state.prebuilt.length ? h('div', { class: 'picker-heading' },
+      h('span', null, 'Prebuilt'),
+      h('span', { class: 'picker-live' }, h('span', { class: 'live-dot' }), 'Live: the time and weather right now')) : null,
+    h('div', { class: 'picker-grid' }, ...state.prebuilt.map(card))));
+  dialog.showModal();
+  pollPicker();
+}
+
+async function pollPicker() {
+  clearTimeout(picker.timer);
+  const dialog = $('#new-screen');
+  if (!dialog.open) return;
+  if (!document.hidden && !picker.busy) {
+    picker.busy = true;
+    try {
+      const { screens } = await api.prebuilt();
+      if (dialog.open) {
+        for (const screen of screens) {
+          const canvas = picker.canvases.get(screen.id);
+          if (canvas) drawPickerFrame(canvas, screen.frame);
+        }
+      }
+    } catch {
+      // keep the last frames; the live view shows if the app is offline
+    } finally {
+      picker.busy = false;
+    }
+  }
+  if (dialog.open) picker.timer = setTimeout(pollPicker, 150);
+}
+
+function setUpPicker() {
+  const dialog = $('#new-screen');
+  // A click on the dimmed backdrop lands on the dialog itself (its content fills it)
+  dialog.addEventListener('click', e => {
+    if (e.target === dialog) dialog.close();
+  });
+  // Keys belong to the picker while it's open, so they can't undo or delete behind it
+  dialog.addEventListener('keydown', e => e.stopPropagation());
+  dialog.addEventListener('close', () => clearTimeout(picker.timer));
 }
 
 function duplicateScreen(id) {
@@ -601,8 +669,6 @@ function summary(widget) {
       return image ? image.name : 'missing image';
     }
     case 'countdown': return o.label ? `${o.label} · ${o.date}` : o.date;
-    case 'weather_details':
-    case 'forecast': return choice(widget.type === 'forecast' ? 'mode' : 'field');
     case 'scene': return choice('theme');
     default: return '';
   }
@@ -744,8 +810,12 @@ function optionField(widget, option) {
       })));
       return field(option.label, h('span', { class: 'color-row' }, picker, swatches));
     }
-    case 'font':
-      return field(option.label, selectInput(state.fonts.map(f => ({ value: f, label: f })), read, write));
+    case 'font': {
+      // A font setting whose default is 'auto' picks a size that suits what the component shows
+      const fonts = state.fonts.map(f => ({ value: f, label: f }));
+      if (option.default === 'auto') fonts.unshift({ value: 'auto', label: 'Automatic' });
+      return field(option.label, selectInput(fonts, read, write));
+    }
     case 'select':
       return field(option.label, selectInput(option.choices, read, value => write(value, true)));
     case 'date':
@@ -1015,8 +1085,9 @@ function onBoardPointerMove(e) {
       const option = component.options.find(o => o.key === key);
       widget.options[key] = clamp(start + delta, option.min ?? 1, Math.min(option.max ?? 512, Math.max(option.min ?? 1, room)));
     };
-    if (component.resize.w) resize(component.resize.w, drag.w, dx, state.W - widget.x);
-    if (component.resize.h) resize(component.resize.h, drag.h, dy, state.H - widget.y);
+    const pad = outlinePad(widget);
+    if (component.resize.w) resize(component.resize.w, drag.w - pad, dx, state.W - widget.x - pad);
+    if (component.resize.h) resize(component.resize.h, drag.h - pad, dy, state.H - widget.y - pad);
     refreshSpritesSoon(80);
   } else {
     const [x, y] = clampPosition(drag.x + dx, drag.y + dy, drag.w, drag.h);
@@ -1317,7 +1388,8 @@ function setUpChrome() {
   $('#show-now').append(icon('show'), 'Show on display');
   $('#power').append(icon('power'));
 
-  $('#add-screen').addEventListener('click', addScreenMenu);
+  $('#add-screen').addEventListener('click', openNewScreen);
+  setUpPicker();
   $('#undo').addEventListener('click', undo);
   $('#redo').addEventListener('click', redo);
   $('#show-now').addEventListener('click', () => showNow(currentScreen().id));

@@ -25,6 +25,7 @@ import re
 import secrets
 import threading
 
+import bdf
 from components import COMPONENTS
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -113,9 +114,38 @@ def normalize(raw, strict=True):
     return {'version': VERSION, 'screens': screens}
 
 
+def upgrade_widget(raw):
+    """A widget saved by an older version, in today's form. "Weather details" and
+    "forecast" used to be components of their own; they're now things the weather
+    component can show, placed so they light the same LEDs as before."""
+    if not isinstance(raw, dict) or raw.get('type') not in ('weather_details', 'forecast'):
+        return raw
+    old = raw.get('options') if isinstance(raw.get('options'), dict) else {}
+    options = {k: v for k, v in old.items() if k in ('color', 'hours', 'outline')}
+    widget = {**raw, 'type': 'weather', 'options': options}
+    if raw['type'] == 'forecast':
+        options.update({k: v for k, v in old.items() if k in ('count', 'start', 'temps')})
+        options['show'] = 'forecast_hours' if old.get('mode') == 'hours' else 'forecast_days'
+        options['forecast_font'] = old.get('font', '4x6')
+        return widget
+    field = old.get('field', 'feels_like')
+    font = old.get('font', '5x7')
+    options.update(show='temperature' if field == 'temp' else field, label=old.get('label', True) is not False,
+                   align='right', font=font)
+    if options['show'] in ('temperature', 'feels_like'):
+        # These leave room for a minus sign now; keep the value's right edge where it was
+        try:
+            x = int(raw.get('x', 0))
+        except (TypeError, ValueError):
+            x = 0
+        widget['x'] = x - bdf.get_font(font).text_width('-')
+    return widget
+
+
 def normalize_widget(raw, strict=True, unique_id=None):
     if not isinstance(raw, dict):
         raise ValueError("each component must be an object")
+    raw = upgrade_widget(raw)
     component = COMPONENTS.get(raw.get('type'))
     if component is None:
         if strict:

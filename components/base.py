@@ -96,9 +96,9 @@ def font_option(default):
 
 
 def outline_option():
-    """A dark edge around the text, so it reads over a busy or bright background like a
-    scene. The renderer draws it (see renderer.outlined), making the box a pixel bigger
-    on each side."""
+    """A dark edge around the text (and any icons), so it reads over a busy or bright
+    background like a scene. Every component that draws text has one. The renderer draws
+    it (see renderer.outlined), making the box a pixel bigger on each side."""
     return Option('outline', 'Dark outline', 'bool', False)
 
 

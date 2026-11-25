@@ -17,8 +17,8 @@ PREBUILT = [
         'widgets': [
             {'type': 'scene', 'x': 0, 'y': 0, 'options': {'theme': 'blossom'}},
             {'type': 'time', 'x': 1, 'y': 1, 'options': {'font': '7x13B', 'color': '#ffffff', 'outline': True}},
-            {'type': 'weather_details', 'x': 1, 'y': 14,
-             'options': {'field': 'temp', 'label': False, 'font': '5x7', 'color': '#ffc4d8', 'outline': True}},
+            {'type': 'weather', 'x': 1, 'y': 14,
+             'options': {'show': 'temperature', 'font': '5x7', 'color': '#ffc4d8', 'outline': True}},
         ],
     },
     {
@@ -28,19 +28,19 @@ PREBUILT = [
         'widgets': [
             {'type': 'scene', 'x': 0, 'y': 0, 'options': {'theme': 'lake'}},
             {'type': 'time', 'x': 1, 'y': 1, 'options': {'font': '7x13B', 'color': '#ffffff', 'outline': True}},
-            {'type': 'weather_details', 'x': 40, 'y': 1,
-             'options': {'field': 'temp', 'label': False, 'font': '5x7', 'color': '#cfe8ff', 'outline': True}},
+            {'type': 'weather', 'x': 35, 'y': 1,
+             'options': {'show': 'temperature', 'align': 'right', 'font': '5x7', 'color': '#cfe8ff', 'outline': True}},
         ],
     },
     {
         'id': 'city',
-        'name': 'City night',
+        'name': 'City skyline',
         'description': 'The time and temperature over a skyline whose windows light up after dark',
         'widgets': [
             {'type': 'scene', 'x': 0, 'y': 0, 'options': {'theme': 'city'}},
             {'type': 'time', 'x': 1, 'y': 1, 'options': {'font': '7x13B', 'color': '#ffffff', 'outline': True}},
-            {'type': 'weather_details', 'x': 47, 'y': 1,
-             'options': {'field': 'temp', 'label': False, 'font': '5x7', 'color': '#ffd58a', 'outline': True}},
+            {'type': 'weather', 'x': 42, 'y': 1,
+             'options': {'show': 'temperature', 'align': 'right', 'font': '5x7', 'color': '#ffd58a', 'outline': True}},
         ],
     },
     {
@@ -50,8 +50,8 @@ PREBUILT = [
         'widgets': [
             {'type': 'scene', 'x': 0, 'y': 0, 'options': {'theme': 'skogafoss'}},
             {'type': 'clock', 'x': 1, 'y': 1, 'options': {'font': '8x13B', 'color': '#ffffff', 'outline': True}},
-            {'type': 'weather_details', 'x': 43, 'y': 20,
-             'options': {'field': 'temp', 'label': False, 'font': '6x10', 'color': '#c8f0ff', 'outline': True}},
+            {'type': 'weather', 'x': 37, 'y': 20,
+             'options': {'show': 'temperature', 'align': 'right', 'font': '6x10', 'color': '#c8f0ff', 'outline': True}},
         ],
     },
 ]

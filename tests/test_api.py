@@ -72,6 +72,15 @@ class ApiTest(unittest.TestCase):
             config['screens'].append({k: screen[k] for k in ('id', 'name', 'duration', 'enabled', 'widgets')})
             self.assertEqual(self.client.put('/api/config', json=config).status_code, 200)
 
+    def test_prebuilt_previews_are_drawn_live(self):
+        from prebuilt import PREBUILT
+        screens = self.client.get('/api/prebuilt').get_json()['screens']
+        self.assertEqual([s['id'] for s in screens], [p['id'] for p in PREBUILT])
+        for screen in screens:
+            frame = screen['frame']
+            self.assertEqual((frame['w'], frame['h']), (64, 32))
+            self.assertEqual(len(base64.b64decode(frame['rgb'])), 64 * 32 * 3)
+
     def test_save(self):
         config = self.client.get('/api/state').get_json()['config']
         config['screens'][0]['name'] = 'Renamed'

@@ -481,7 +481,7 @@ class Lake(Theme):
 class City(Theme):
     """A city skyline by a river; windows light up one by one as night falls"""
     name = 'city'
-    label = 'City night'
+    label = 'City skyline'
 
     BODIES = [(92, 102, 138), (150, 104, 90), (116, 126, 152), (78, 96, 128), (136, 134, 148), (106, 96, 122)]
     # x, width, top row on a 64x32 display (scaled for others)

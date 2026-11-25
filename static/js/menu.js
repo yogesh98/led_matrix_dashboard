@@ -3,8 +3,6 @@
 // openMenu(x, y, items) shows a menu at (x, y). Each item is one of:
 //   {label, icon, shortcut, action, disabled, danger}   a command
 //   {label, checked, action}                            a command with a checkmark
-//   {label, detail, preview, action}                    a bigger command with a picture (an element)
-//                                                       and a line of description
 //   {heading: 'Text'}                                   a small heading
 //   '-'                                                 a divider
 // It closes on a click elsewhere, Escape, scrolling or resizing, or after a command runs.
@@ -33,22 +31,6 @@ function itemElement(item) {
   if (item === '-') return h('div', { class: 'menu-sep', role: 'separator' });
   if (item.heading) return h('div', { class: 'menu-heading' }, item.heading);
   const checkable = item.checked !== undefined;
-  if (item.preview) {
-    return h('button', {
-      type: 'button',
-      role: 'menuitem',
-      class: 'menu-item rich',
-      disabled: item.disabled,
-      onclick: () => {
-        closeMenu();
-        item.action();
-      },
-    },
-      h('span', { class: 'menu-preview' }, item.preview),
-      h('span', { class: 'menu-text' },
-        h('span', { class: 'menu-label' }, item.label),
-        item.detail ? h('span', { class: 'menu-detail' }, item.detail) : null));
-  }
   return h('button', {
     type: 'button',
     role: checkable ? 'menuitemcheckbox' : 'menuitem',

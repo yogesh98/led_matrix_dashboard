@@ -148,5 +148,16 @@ class OutlineTest(unittest.TestCase):
         self.assertGreater(len(black), len(lit))
 
     def test_off_by_default(self):
-        for type in ('clock', 'time', 'date', 'countdown', 'weather_details'):
+        for type in ('clock', 'time', 'date', 'countdown', 'weather', 'text'):
             self.assertFalse(normalize_widget({'type': type})['options']['outline'], type)
+
+    def test_every_component_with_text_has_one(self):
+        from components import COMPONENTS
+        for type, component in COMPONENTS.items():
+            if type not in ('image', 'box', 'scene'):
+                self.assertIn('outline', [o.key for o in component.options], type)
+
+    def test_scrolling_text_is_its_width_plus_the_edge(self):
+        widget = normalize_widget({'type': 'text', 'options': {'scroll': True, 'width': 40, 'outline': True}})
+        image, _ = render_widget(widget, context(now=NOON))
+        self.assertEqual(image.width, 42)

@@ -1,5 +1,5 @@
 import bdf
-from components.base import ASCII, Component, Option, color_option, font_option, line_rows, rgba
+from components.base import ASCII, Component, Option, color_option, font_option, line_rows, outline_option, rgba
 
 
 class Text(Component):
@@ -13,6 +13,7 @@ class Text(Component):
         Option('scroll', 'Scroll', 'bool', False),
         Option('width', 'Width', 'number', 64, min=4, max=512, unit='px', show_if={'scroll': True}),
         Option('speed', 'Speed', 'number', 15, min=1, max=100, unit='px/s', show_if={'scroll': True}),
+        outline_option(),
     )
     resize = {'w': 'width'}
     resize_when = {'scroll': True}
