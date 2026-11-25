@@ -605,6 +605,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, .palette-item:f
 .menu-label { flex: 1; white-space: nowrap; }
 .menu-key { font: 12px/1 system-ui, sans-serif; color: var(--faint); letter-spacing: 0.04em; }
 .menu-sep { height: 1px; margin: 5px 6px; background: var(--border-strong); }
+.menu-item.rich { height: auto; padding: 6px 10px 6px 6px; gap: 12px; }
+.menu-preview { display: flex; flex: none; padding: 3px; background: #060708; border-radius: 5px; }
+.menu-preview canvas { display: block; }
+.menu-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; max-width: 220px; }
+.menu-item.rich .menu-label { font-weight: 600; }
+.menu-detail { font-size: 12px; line-height: 1.35; color: var(--muted); white-space: normal; }
+.menu-item.rich:hover:not(:disabled) .menu-detail, .menu-item.rich:focus-visible .menu-detail { color: inherit; opacity: 0.8; }
 .menu-heading {
   padding: 6px 10px 4px;
   font-size: 11px;

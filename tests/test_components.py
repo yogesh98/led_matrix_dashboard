@@ -127,6 +127,7 @@ class WeatherDetailsTest(unittest.TestCase):
         return COMPONENTS['weather_details'].value(field, self.WEATHER, None, ctx, options.get('hours', '12'))
 
     def test_values(self):
+        self.assertEqual(self.value('temp'), '64°')
         self.assertEqual(self.value('feels_like'), '61°')
         self.assertEqual(self.value('humidity'), '82%')
         self.assertEqual(self.value('high_low'), '66°/48°')
@@ -136,7 +137,7 @@ class WeatherDetailsTest(unittest.TestCase):
         self.assertEqual(self.value('wind'), '12 NW')
 
     def test_every_field_fits_the_display(self):
-        for field in ('feels_like', 'humidity', 'high_low', 'sunrise', 'sunset', 'wind'):
+        for field in ('temp', 'feels_like', 'humidity', 'high_low', 'sunrise', 'sunset', 'wind'):
             image, _ = render_widget(widget('weather_details', field=field), context(now=NOW, weather=self.WEATHER))
             self.assertLessEqual(image.width, 64, field)
             self.assertGreater(lit(image), 0, field)

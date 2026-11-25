@@ -22,6 +22,7 @@ const state = {
   outlines: true,
   clipboard: null,      // a copied widget: {widget, size, sprite}
   images: [],           // uploaded images and built-in icons, from /api/images
+  prebuilt: [],         // ready-made screens for the + menu: [{name, description, widgets, thumbnail}]
   pitch: 12,            // CSS pixels per LED on the editor board
 };
 
@@ -266,7 +267,9 @@ function addWidget(type, x, y, options = {}, size = null) {
   const widget = { id: uid('w'), type, x, y, hidden: false, options: { ...clone(component.defaults), ...options } };
   if (!size) state.sprites.set(widget.id, { ...component.sprite });
   change(() => {
-    currentScreen().widgets.push(widget);
+    // Backgrounds (scenes) go under everything already there
+    if (component.background) currentScreen().widgets.unshift(widget);
+    else currentScreen().widgets.push(widget);
     state.selectedId = widget.id;
   }, { sprites: true });
 }
@@ -360,13 +363,35 @@ function updateWidget(id, mutate, options) {
   }, options);
 }
 
-function addScreen() {
+// Adds a blank screen, or a copy of a prebuilt one
+function addScreen(prebuilt = null) {
   const screen = { id: uid('s'), name: `Screen ${screens().length + 1}`, duration: 15, enabled: true, widgets: [] };
+  if (prebuilt) {
+    const names = new Set(screens().map(s => s.name));
+    let name = prebuilt.name;
+    for (let n = 2; names.has(name); n++) name = `${prebuilt.name} ${n}`;
+    screen.name = name;
+    screen.widgets = prebuilt.widgets.map(widget => ({ ...clone(widget), id: uid('w') }));
+  }
   change(() => {
     screens().push(screen);
     state.screenId = screen.id;
     state.selectedId = null;
-  });
+  }, { sprites: Boolean(prebuilt) });
+}
+
+function addScreenMenu() {
+  const rect = $('#add-screen').getBoundingClientRect();
+  openMenu(rect.left, rect.bottom + 6, [
+    { label: 'Blank screen', icon: 'plus', action: () => addScreen() },
+    ...(state.prebuilt.length ? ['-', { heading: 'Prebuilt' }] : []),
+    ...state.prebuilt.map(prebuilt => {
+      const { w, h: hgt, rgb } = prebuilt.thumbnail;
+      const preview = h('canvas');
+      drawLeds(preview, decodeBase64(rgb), w, hgt, Math.max(1, Math.min(2, Math.floor(128 / w))), { off: null });
+      return { label: prebuilt.name, detail: prebuilt.description, preview, action: () => addScreen(prebuilt) };
+    }),
+  ]);
 }
 
 function duplicateScreen(id) {
@@ -578,6 +603,7 @@ function summary(widget) {
     case 'countdown': return o.label ? `${o.label} · ${o.date}` : o.date;
     case 'weather_details':
     case 'forecast': return choice(widget.type === 'forecast' ? 'mode' : 'field');
+    case 'scene': return choice('theme');
     default: return '';
   }
 }
@@ -1291,7 +1317,7 @@ function setUpChrome() {
   $('#show-now').append(icon('show'), 'Show on display');
   $('#power').append(icon('power'));
 
-  $('#add-screen').addEventListener('click', addScreen);
+  $('#add-screen').addEventListener('click', addScreenMenu);
   $('#undo').addEventListener('click', undo);
   $('#redo').addEventListener('click', redo);
   $('#show-now').addEventListener('click', () => showNow(currentScreen().id));
@@ -1360,6 +1386,7 @@ async function start() {
   state.H = data.display.height;
   state.fonts = data.fonts;
   state.images = data.images;
+  state.prebuilt = data.prebuilt || [];
   state.config = data.config;
   state.screenId = data.config.screens[0].id;
   for (const component of data.components) {

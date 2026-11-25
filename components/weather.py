@@ -1,7 +1,8 @@
 from datetime import datetime
 
 import bdf
-from components.base import ASCII, Component, Option, color_option, font_option, line_rows, rgba, widest_digits
+from components.base import (ASCII, Component, Option, color_option, font_option, line_rows, outline_option, rgba,
+                             widest_digits)
 from components.openweathermap import compass, data_or_sample, icon, today_high_low
 
 
@@ -57,9 +58,10 @@ class WeatherDetails(Component):
     """One weather detail on a line: a short label on the left, the value on the right"""
     type = 'weather_details'
     label = 'Weather details'
-    description = 'Feels like, humidity, high/low, sunrise, sunset or wind'
+    description = 'Temperature, feels like, humidity, high/low, sunrise, sunset or wind'
     options = (
         Option('field', 'Show', 'select', 'feels_like', choices=[
+            ('temp', 'Temperature'),
             ('feels_like', 'Feels like'),
             ('humidity', 'Humidity'),
             ('high_low', 'High / low today'),
@@ -72,10 +74,11 @@ class WeatherDetails(Component):
                show_if={'field': ['sunrise', 'sunset']}),
         color_option(),
         font_option('5x7'),
+        outline_option(),
     )
-    LABELS = {'feels_like': 'Feels', 'humidity': 'Hum', 'high_low': 'H/L', 'sunrise': 'Rise', 'sunset': 'Set', 'wind': 'Wind'}
+    LABELS = {'temp': 'Temp', 'feels_like': 'Feels', 'humidity': 'Hum', 'high_low': 'H/L', 'sunrise': 'Rise', 'sunset': 'Set', 'wind': 'Wind'}
     # The widest each value gets, so the box doesn't change size as the weather does
-    SAMPLES = {'feels_like': '00°', 'humidity': '100%', 'high_low': '00°/00°', 'sunrise': '00:00', 'sunset': '00:00', 'wind': '00 NW'}
+    SAMPLES = {'temp': '00°', 'feels_like': '00°', 'humidity': '100%', 'high_low': '00°/00°', 'sunrise': '00:00', 'sunset': '00:00', 'wind': '00 NW'}
 
     def _layout(self, opts):
         font = bdf.get_font(opts['font'])
@@ -94,6 +97,8 @@ class WeatherDetails(Component):
             return f"{high_low[0]}°/{high_low[1]}°" if high_low else None
         if weather is None:
             return None
+        if field == 'temp':
+            return f"{weather['temp']}°"
         if field == 'feels_like':
             return f"{weather['feels_like']}°"
         if field == 'humidity':

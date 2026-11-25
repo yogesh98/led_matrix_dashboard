@@ -1,8 +1,9 @@
 """What's on the display: a list of screens, each with components placed on it.
 
 It's kept in one JSON file (data/display.json, or $LED_LAYOUT_FILE), written by the
-management page. Until the first save the display shows default_config(), which is
-the layout the dashboard had before the management page existed.
+management page. Until the first save the display shows default_config(): the
+Skógafoss prebuilt screen, plus the layout the dashboard had before the management page
+existed (clock, date and weather), out of the rotation.
 
     {
       "version": 1,
@@ -35,19 +36,30 @@ _ID = re.compile(r'[A-Za-z0-9_-]{1,64}')
 
 
 def default_config():
+    from prebuilt import PREBUILT  # imported here because prebuilt.py imports this module
+    skogafoss = next(p for p in PREBUILT if p['id'] == 'skogafoss')
     return {
         'version': VERSION,
-        'screens': [{
-            'id': 'main',
-            'name': 'Main',
-            'duration': 15,
-            'enabled': True,
-            'widgets': [
-                {'id': 'clock', 'type': 'clock', 'x': 8, 'y': 1},
-                {'id': 'date', 'type': 'date', 'x': 1, 'y': 24},
-                {'id': 'weather', 'type': 'weather', 'x': 32, 'y': 0},
-            ],
-        }],
+        'screens': [
+            {
+                'id': 'skogafoss',
+                'name': skogafoss['name'],
+                'duration': 15,
+                'enabled': True,
+                'widgets': [{**w, 'id': f"skogafoss-{i}"} for i, w in enumerate(skogafoss['widgets'])],
+            },
+            {
+                'id': 'main',
+                'name': 'Classic',
+                'duration': 15,
+                'enabled': False,
+                'widgets': [
+                    {'id': 'clock', 'type': 'clock', 'x': 8, 'y': 1},
+                    {'id': 'date', 'type': 'date', 'x': 1, 'y': 24},
+                    {'id': 'weather', 'type': 'weather', 'x': 32, 'y': 0},
+                ],
+            },
+        ],
     }
 
 

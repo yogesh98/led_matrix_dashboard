@@ -1,7 +1,7 @@
 import calendar
 
 import bdf
-from components.base import Component, Option, color_option, font_option, line_rows, rgba
+from components.base import Component, Option, color_option, font_option, line_rows, outline_option, rgba
 
 # Each format is a list of parts, drawn left to right with `gap` pixels between them
 FORMATS = {
@@ -49,6 +49,7 @@ class Date(Component):
             ('numeric', '11/24'),
         ]),
         Option('gap', 'Gap', 'number', 1, min=0, max=16, unit='px'),
+        outline_option(),
     )
 
     def __init__(self):

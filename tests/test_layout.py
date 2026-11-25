@@ -14,8 +14,8 @@ def layout(*screens):
 class NormalizeTest(unittest.TestCase):
     def test_fills_in_defaults_and_is_stable(self):
         config = normalize(default_config())
-        clock = config['screens'][0]['widgets'][0]
-        self.assertEqual(clock['options'], {'color': '#ffffff', 'font': '8x13B', 'hours': '12', 'spacing': 1})
+        clock = config['screens'][1]['widgets'][0]  # the classic screen's clock
+        self.assertEqual(clock['options'], {'color': '#ffffff', 'font': '8x13B', 'hours': '12', 'spacing': 1, 'outline': False})
         self.assertFalse(clock['hidden'])
         self.assertEqual(normalize(config), config)
 

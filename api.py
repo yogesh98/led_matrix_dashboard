@@ -11,7 +11,8 @@ import bdf
 from components import COMPONENTS
 from images import MAX_SIZE, MAX_UPLOAD_BYTES, library as images
 from layout import normalize_widget
-from renderer import render_widget
+from prebuilt import prebuilt_screens
+from renderer import render_screen, render_widget
 
 bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -51,8 +52,13 @@ def state():
         components=components,
         fonts=bdf.available_fonts(),
         images=[image_json(info) for info in images.list()],
+        prebuilt=[{**screen, 'thumbnail': frame_json(render_screen(screen, ctx))} for screen in prebuilt_screens()],
         brightness=d.matrix.brightness,
     )
+
+
+def frame_json(frame):
+    return {'w': frame.width, 'h': frame.height, 'rgb': base64.b64encode(frame.tobytes()).decode('ascii')}
 
 
 @bp.put('/config')

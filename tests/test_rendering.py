@@ -56,8 +56,14 @@ def legacy_frame(now, weather):
 
 
 class DefaultLayoutTest(unittest.TestCase):
-    def test_matches_the_display_before_the_management_page(self):
-        screen = normalize(default_config())['screens'][0]
+    def test_shows_skogafoss(self):
+        screens = normalize(default_config())['screens']
+        self.assertEqual([(s['name'], s['enabled']) for s in screens], [('Skógafoss', True), ('Classic', False)])
+        self.assertEqual([w['type'] for w in screens[0]['widgets']], ['scene', 'clock', 'weather_details'])
+        self.assertEqual(screens[0]['widgets'][0]['options']['theme'], 'skogafoss')
+
+    def test_classic_screen_matches_the_display_before_the_management_page(self):
+        screen = normalize(default_config())['screens'][1]
         for now in TIMES:
             for weather in WEATHER:
                 with self.subTest(now=now, weather=weather):

@@ -6,6 +6,7 @@ from components.countdown import Countdown
 from components.date import Date
 from components.forecast import Forecast
 from components.image import Image
+from components.scene import Scene
 from components.text import Text
 from components.weather import Weather, WeatherDetails
 
@@ -13,7 +14,7 @@ from components.weather import Weather, WeatherDetails
 COMPONENTS = {c.type: c for c in (
     Clock(), Time(), Date(), Countdown(),
     Weather(), WeatherDetails(), Forecast(),
-    Text(), Image(), Box(),
+    Text(), Image(), Box(), Scene(),
 )}
 
 

@@ -95,6 +95,13 @@ def font_option(default):
     return Option('font', 'Font', 'font', default)
 
 
+def outline_option():
+    """A dark edge around the text, so it reads over a busy or bright background like a
+    scene. The renderer draws it (see renderer.outlined), making the box a pixel bigger
+    on each side."""
+    return Option('outline', 'Dark outline', 'bool', False)
+
+
 def hours_option():
     return Option('hours', 'Hours', 'select', '12', choices=[('12', '12-hour'), ('24', '24-hour')])
 
@@ -138,6 +145,8 @@ class Component:
     # and when it's available, e.g. {'scroll': True}
     resize = None
     resize_when = None
+    # Backgrounds go under everything else when added, and fill the display
+    background = False
 
     def clean_options(self, raw):
         raw = raw if isinstance(raw, dict) else {}
@@ -164,6 +173,7 @@ class Component:
             'defaults': self.defaults(),
             'resize': self.resize,
             'resize_when': self.resize_when,
+            'background': self.background,
         }
 
 

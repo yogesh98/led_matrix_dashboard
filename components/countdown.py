@@ -1,7 +1,8 @@
 from datetime import date, datetime, time
 
 import bdf
-from components.base import ASCII, Component, Option, color_option, font_option, line_rows, rgba, widest_digits
+from components.base import (ASCII, Component, Option, color_option, font_option, line_rows, outline_option, rgba,
+                             widest_digits)
 
 NEXT_NEW_YEAR = date(date.today().year + 1, 1, 1).isoformat()
 
@@ -50,6 +51,7 @@ class Countdown(Component):
         Option('layout', 'Layout', 'select', 'stacked', choices=[('stacked', 'Label above'), ('inline', 'One line')]),
         color_option(),
         font_option('6x10'),
+        outline_option(),
     )
 
     def _layout(self, opts):

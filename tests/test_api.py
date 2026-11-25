@@ -55,6 +55,22 @@ class ApiTest(unittest.TestCase):
         clock = next(c for c in data['components'] if c['type'] == 'clock')
         self.assertEqual((clock['thumbnail']['w'], clock['thumbnail']['h']), (16, 21))
         self.assertIn('8x13B', data['fonts'])
+        scene = next(c for c in data['components'] if c['type'] == 'scene')
+        self.assertTrue(scene['background'])
+        self.assertFalse(clock['background'])
+
+    def test_state_lists_prebuilt_screens(self):
+        prebuilt = self.client.get('/api/state').get_json()['prebuilt']
+        self.assertGreaterEqual(len(prebuilt), 1)
+        for screen in prebuilt:
+            self.assertTrue(screen['name'] and screen['description'])
+            thumbnail = screen['thumbnail']
+            self.assertEqual((thumbnail['w'], thumbnail['h']), (64, 32))
+            self.assertEqual(len(base64.b64decode(thumbnail['rgb'])), 64 * 32 * 3)
+            # Its widgets can be saved as they are, as a new screen
+            config = self.client.get('/api/state').get_json()['config']
+            config['screens'].append({k: screen[k] for k in ('id', 'name', 'duration', 'enabled', 'widgets')})
+            self.assertEqual(self.client.put('/api/config', json=config).status_code, 200)
 
     def test_save(self):
         config = self.client.get('/api/state').get_json()['config']
@@ -86,7 +102,7 @@ class ApiTest(unittest.TestCase):
 
     def test_live(self):
         data = self.client.get('/api/live').get_json()
-        self.assertEqual(data['screen'], {'id': 'main', 'name': 'Main'})
+        self.assertEqual(data['screen'], {'id': 'skogafoss', 'name': 'Skógafoss'})
         self.assertEqual(data['remaining'], 4.2)
         self.assertEqual(base64.b64decode(data['rgb'])[:3], bytes([10, 20, 30]))
 

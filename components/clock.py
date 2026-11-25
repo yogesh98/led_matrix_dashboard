@@ -1,5 +1,5 @@
 import bdf
-from components.base import Component, Option, color_option, font_option, hours_option, line_rows, rgba
+from components.base import Component, Option, color_option, font_option, hours_option, line_rows, outline_option, rgba
 
 DIGITS = '0123456789'
 
@@ -24,6 +24,7 @@ class Clock(Component):
         font_option('8x13B'),
         hours_option(),
         Option('spacing', 'Line spacing', 'number', 1, min=0, max=16, unit='px'),
+        outline_option(),
     )
 
     def _layout(self, opts):
@@ -52,6 +53,7 @@ class Time(Component):
         hours_option(),
         Option('seconds', 'Show seconds', 'bool', False),
         Option('blink', 'Blink the colon', 'bool', False),
+        outline_option(),
     )
 
     def _layout(self, opts):

@@ -4,7 +4,7 @@ page's previews, so the preview shows exactly what the LEDs will."""
 import threading
 import time
 
-from PIL import Image
+from PIL import Image, ImageFilter
 
 from components import COMPONENTS
 
@@ -35,7 +35,22 @@ def render_widget(widget, ctx):
     width, height = component.size(widget['options'], ctx)
     image = Image.new('RGBA', (max(1, min(MAX_SIZE, width)), max(1, min(MAX_SIZE, height))), (0, 0, 0, 0))
     note = component.draw(image, widget['options'], ctx)
+    if widget['options'].get('outline') is True:
+        image = outlined(image)
     return image, note
+
+
+def outlined(image):
+    """image with a 1-pixel black edge around everything drawn in it. It's 2 pixels bigger
+    each way, with the original drawn 1 pixel in. Black is an LED that's off, so the edge
+    separates text from whatever is behind it."""
+    padded = Image.new('RGBA', (image.width + 2, image.height + 2), (0, 0, 0, 0))
+    padded.paste(image, (1, 1))
+    edge = padded.getchannel('A').point(lambda a: 255 if a else 0).filter(ImageFilter.MaxFilter(3))
+    result = Image.new('RGBA', padded.size, (0, 0, 0, 0))
+    result.paste((0, 0, 0, 255), (0, 0), edge)
+    result.alpha_composite(padded)
+    return result
 
 
 def render_screen(screen, ctx):
