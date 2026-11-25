@@ -10,7 +10,7 @@ Every picture here was drawn by the same code that drives the LEDs (`docs/render
 
 ## Scenes
 
-Four prebuilt screens put the time and temperature over an animated scene. Add one from the + next to Screens on the management page.
+Four prebuilt screens put the time and temperature over an animated scene. Add one from the + next to Screens on the management page, which shows them all live.
 
 <table>
   <tr>
@@ -26,7 +26,7 @@ Four prebuilt screens put the time and temperature over an animated scene. Add o
     <td><img src="docs/skogafoss-night.gif" alt="Skógafoss at night under the northern lights and a full moon"></td>
   </tr>
   <tr>
-    <td><b>City night</b>: a skyline by a river. Windows light up one by one as it gets dark, change through the night, and wobble in the water. A warning light blinks on the tallest tower.</td>
+    <td><b>City skyline</b>: a skyline by a river. Windows light up one by one as it gets dark, change through the night, and wobble in the water. A warning light blinks on the tallest tower.</td>
     <td><b>Skógafoss</b>: Iceland's great waterfall, with spray rising from the pool and a tent glowing by the river. A rainbow hangs in the mist on sunny days, and the northern lights come out on clear nights. This is the screen a new display starts with.</td>
   </tr>
 </table>
@@ -37,7 +37,7 @@ Four prebuilt screens put the time and temperature over an animated scene. Add o
   <img src="docs/weather.gif" width="680" alt="Four scenes at once: rain over the mountain lake, snow on the cherry blossom, a thunderstorm with lightning over the city, and fog at Skógafoss">
 </p>
 
-Scenes use the same OpenWeatherMap data as the weather components, checked every 15 minutes:
+Scenes use the same OpenWeatherMap data as the Weather component, checked every 15 minutes:
 
 - **Clear**: the sun by day; the moon in its real phase and twinkling stars by night, with the odd shooting star
 - **Clouds**: a few drifting clouds, up to a gray overcast sky
@@ -69,22 +69,22 @@ The sky goes from night to sunrise, day, sunset and dusk, timed by today's sunri
 Open `http://<the Pi's address>:5000` in a browser on your network (for example http://192.168.1.31:5000). It has no login, so only run it on a network you trust.
 
 - **Screens**: the display shows one screen at a time. Screens with "Take turns" on are shown in order, each for its time. "Show on display" puts the screen you're editing on now.
-- **Prebuilt screens**: the + next to Screens adds a blank screen or one of the prebuilt ones. Once added it's an ordinary screen you can change.
+- **New screens**: the + next to Screens lets you start from a blank screen or pick a prebuilt one. The prebuilt previews are live, so each shows the time and weather right now, moving just as it will on the display. Once added it's an ordinary screen you can change.
 - **Scenes**: the Scene component is the animated background behind the prebuilt screens, and you can put one behind any screen. It always goes under everything else. Its settings pick the scene, and can fix the weather or time of day instead of following them, which is handy for trying each look (the editor redraws it once a second; the display runs it at full speed). A brightness setting dims just the background.
-- **Components**: drag them from the list onto the display, then drag them around. Click one to change its settings (font, color, format, and so on). Arrow keys nudge it one LED at a time. There are clocks, the date, a countdown, the weather (now, the temperature, details such as feels-like or sunset, and a forecast), text that can scroll, images and boxes. The clock, time, date, countdown and weather details have a "Dark outline" setting that keeps them readable over a bright sky.
+- **Components**: drag them from the list onto the display, then drag them around. Click one to change its settings (font, color, format, and so on). Arrow keys nudge it one LED at a time. There are clocks, the date, a countdown, the weather, text that can scroll, images and boxes. The Weather component's "Show" setting picks what it shows: the weather icon with the temperature and wind, just the temperature, one detail (feels like, high and low, humidity, wind, sunrise or sunset), or the forecast for the next few days or hours. Everything with text has a "Dark outline" setting that keeps it readable over a scene or a bright sky.
 - **Images**: drop an image file onto the display, or upload one in an Image component's settings. PNG, JPG, GIF and WebP work, and animated GIFs play on the display. The weather icons are there to use too, in any color.
 - **Right-click** a component, an empty spot on the display, or a screen for shortcuts: copy and paste (also between screens), layer order, centering, hide, delete, or adding a component at that spot.
 - **Live view**: the top bar shows what the display is showing right now, and has the brightness control.
 
 <p align="center">
-  <img src="docs/prebuilt-menu.png" width="560" alt="The + menu next to Screens, offering a blank screen or one of the four prebuilt screens, each with a live preview">
+  <img src="docs/new-screen.png" width="620" alt="The New screen picker: a Blank screen option, and the four prebuilt screens as live previews showing the current time and weather">
 </p>
 
 Changes save as you make them, and the display picks them up right away. ⌘Z / Ctrl+Z undoes them. The editor previews are drawn by the same code that drives the LEDs, so they match the panel pixel for pixel.
 
 The layout is saved in `data/display.json` and uploaded images in `data/images/`. Git ignores `data/`, so deploys don't touch it. Delete `data/display.json` to go back to the default layout: the Skógafoss screen, plus the original clock, date and weather as a "Classic" screen that's out of the rotation.
 
-The weather, weather details and forecast components all use the OpenWeatherMap settings in `.env`. Until weather has loaded, the editor shows sample weather so you can lay things out, and the display leaves those spots blank.
+The Weather component and the scenes use the OpenWeatherMap settings in `.env`. Until weather has loaded, the editor shows sample weather so you can lay things out, and the display leaves those spots blank.
 
 ### Running it on your computer
 
