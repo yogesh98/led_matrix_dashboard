@@ -4,8 +4,11 @@ import sys
 import os
 import pwd
 
-# sys.path.append(os.path.abspath(os.path.dirname(__file__) + '/..'))
-from rgbmatrix import RGBMatrix, RGBMatrixOptions
+if os.environ.get('LED_EMULATOR'):
+    # No LED panel, e.g. on your computer (see emulator.py)
+    from emulator import RGBMatrix, RGBMatrixOptions
+else:
+    from rgbmatrix import RGBMatrix, RGBMatrixOptions
 
 
 class MatrixBase(object):

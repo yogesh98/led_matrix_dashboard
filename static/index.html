@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LED Matrix</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script type="module" src="/static/js/main.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+      LED Matrix
+    </div>
+
+    <button class="live" id="live" type="button" title="What the display is showing right now. Click to edit that screen.">
+      <canvas id="live-canvas" aria-label="Live view of the display"></canvas>
+      <span class="live-meta">
+        <span class="live-label"><span class="live-dot"></span><span id="live-status">On the display</span></span>
+        <span class="live-screen" id="live-screen">…</span>
+        <span class="live-time" id="live-time"></span>
+      </span>
+    </button>
+
+    <div class="topbar-spacer"></div>
+
+    <div class="save-status" id="save-status" aria-live="polite"></div>
+
+    <div class="brightness">
+      <button class="icon-btn" id="power" type="button" title="Turn the display off or on"></button>
+      <input type="range" id="brightness" min="0" max="100" step="1" aria-label="Brightness">
+      <span class="brightness-value" id="brightness-value"></span>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside class="sidebar left">
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Screens</h2>
+          <button class="icon-btn" id="add-screen" type="button" title="New screen"></button>
+        </div>
+        <ul class="screen-list" id="screen-list"></ul>
+        <p class="hint" id="rotation-hint"></p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><h2>Components</h2></div>
+        <p class="hint">Drag onto the display, or click to add.</p>
+        <ul class="palette" id="palette"></ul>
+      </section>
+    </aside>
+
+    <section class="stage">
+      <div class="stage-toolbar">
+        <div class="stage-title">
+          <h1 id="screen-title"></h1>
+          <span class="stage-sub" id="screen-sub"></span>
+        </div>
+        <div class="toolbar">
+          <button class="icon-btn" id="undo" type="button" title="Undo (⌘Z)"></button>
+          <button class="icon-btn" id="redo" type="button" title="Redo (⇧⌘Z)"></button>
+          <button class="btn toggle" id="toggle-outlines" type="button" title="Show the outline of every component">Outlines</button>
+          <button class="btn primary" id="show-now" type="button" title="Put this screen on the display now"></button>
+        </div>
+      </div>
+
+      <div class="board-wrap" id="board-wrap">
+        <div class="board" id="board">
+          <canvas id="board-canvas" aria-label="Preview of this screen"></canvas>
+          <div class="overlay" id="overlay"></div>
+        </div>
+      </div>
+
+      <div class="stage-foot" id="stage-foot"></div>
+    </section>
+
+    <aside class="sidebar right">
+      <section class="panel" id="inspector"></section>
+      <section class="panel">
+        <div class="panel-head"><h2>Layers</h2></div>
+        <ul class="layers" id="layers"></ul>
+        <p class="hint" id="layers-empty">Nothing on this screen yet. Drag a component onto the display.</p>
+      </section>
+    </aside>
+  </main>
+
+  <div class="toast" id="toast" role="status" hidden></div>
+  <div class="fatal" id="fatal" hidden></div>
+</body>
+</html>

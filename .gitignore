@@ -130,3 +130,5 @@ dmypy.json
 .pyre/
 
 view.gif
+# Layout saved by the management page
+data/

@@ -1,3 +1,43 @@
+## Managing the display
+
+Open `http://<the Pi's address>:5000` in a browser on your network (for example http://192.168.1.31:5000). It has no login, so only run it on a network you trust.
+
+- **Screens**: the display shows one screen at a time. Screens with "Take turns" on are shown in order, each for its time. "Show on display" puts the screen you're editing on now.
+- **Components**: drag them from the list onto the display, then drag them around. Click one to change its settings (font, color, format, and so on). Arrow keys nudge it one LED at a time. There are clocks, the date, a countdown, the weather (now, details such as feels-like or sunset, and a forecast), text that can scroll, images and boxes.
+- **Images**: drop an image file onto the display, or upload one in an Image component's settings. PNG, JPG, GIF and WebP work, and animated GIFs play on the display. The weather icons are there to use too, in any color.
+- **Right-click** a component, an empty spot on the display, or a screen for shortcuts: copy and paste (also between screens), layer order, centering, hide, delete, or adding a component at that spot.
+- **Live view**: the top bar shows what the display is showing right now, and has the brightness control.
+
+Changes save as you make them, and the display picks them up right away. ⌘Z / Ctrl+Z undoes them. The editor previews are drawn by the same code that drives the LEDs, so they match the panel pixel for pixel.
+
+The layout is saved in `data/display.json` and uploaded images in `data/images/`. Git ignores `data/`, so deploys don't touch it. Delete `data/display.json` to go back to the original layout (clock, date and weather).
+
+The weather, weather details and forecast components all use the OpenWeatherMap settings in `.env`. Until weather has loaded, the editor shows sample weather so you can lay things out, and the display leaves those spots blank.
+
+### Running it on your computer
+
+You can run the dashboard without a Pi or LED panel to work on the page or try out layouts. Frames then only show in the page.
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install flask pillow requests python-dotenv
+```
+
+```bash
+LED_EMULATOR=1 PORT=5050 .venv/bin/python main.py
+```
+
+Then open http://localhost:5050. (On macOS port 5000 is taken by AirPlay.) Set `LED_LAYOUT_FILE=/some/file.json` to keep your experiments out of `data/`.
+
+### Adding a component
+
+Each component is a class in `components/` (see `components/base.py`). It says how big its box is and draws into a Pillow image of that size, and it lists its settings as `Option`s. The page builds its settings form from those, so a new component only needs its class added to `COMPONENTS` in `components/__init__.py`. Data that's slow to get, like the weather, goes in a `PollingSource` (see `components/weather.py`) so drawing never waits on the network.
+
+Tests are in `tests/` and run before every deploy:
+
+```bash
+.venv/bin/python -m unittest discover -s tests -t .
+```
+
 ## Setting up a Pi
 
 Works on Raspberry Pi OS Bookworm or newer (the LED driver needs Python 3.11+). The same steps set up another Pi.

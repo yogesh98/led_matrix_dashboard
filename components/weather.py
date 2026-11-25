@@ -1,79 +1,124 @@
-from components.basecomponent import BaseComponent
-from rgbmatrix import graphics
-from PIL import Image
-import os
-import requests
-from dotenv import load_dotenv
+from datetime import datetime
 
-load_dotenv()
-
-class Weather(BaseComponent):
-    def __init__(self, pos_x, pos_y, swap_frame):
-        super().__init__(pos_x, pos_y, 32, 32, swap_frame, 900)
-        self.font = graphics.Font()
-        self.font.LoadFont("fonts/6x10.bdf")
-        self.degreeFont = graphics.Font()
-        self.degreeFont.LoadFont("fonts/5x8.bdf")
-        self.textColor = graphics.Color(255, 255, 255)
-    
-    def draw_frame(self, canvas):
-        icon = Image.open('icons/' + self.data['icon'] + '.png')
-        windIcon = Image.open('icons/wind.png')
-        newCanvas = self.clear_area(canvas)
-        newCanvas.SetImage(icon.convert('RGB'), self.pos_x, self.pos_y)
-        newCanvas.SetImage(windIcon.convert('RGB'), self.pos_x, self.pos_y + 16)
-
-        degreeFont = self.font
-        xoffset_temp = 19
-        xoffset_wind = 19
-        yoffset_temp = 12
-        yoffset_wind = 27
-        if self.data['temp'] > 99:
-            degreeFont = self.degreeFont
-            xoffset_temp = 16
-            yoffset_temp = 11
-
-        if self.data['wind_speed'] > 99:
-            xoffset_wind = 16
-            yoffset_wind = 26
-
-        temp_str = f" {self.data['temp']}" if int(self.data['temp']) < 10 else str(self.data['temp'])
-        wind_speed_str = f" {self.data['wind_speed']}" if int(self.data['wind_speed']) < 10 else str(self.data['wind_speed'])
-
-        graphics.DrawText(newCanvas, degreeFont, self.pos_x + xoffset_temp, self.pos_y + yoffset_temp, self.textColor, temp_str)
-        graphics.DrawText(newCanvas, degreeFont, self.pos_x + xoffset_wind, self.pos_y + yoffset_wind, self.textColor, wind_speed_str)
-        return newCanvas
-    
-    def data_eq(self, data, newData):
-        return data['icon'] == newData['icon'] and data['temp'] == newData['temp'] and data['wind_speed'] == newData['wind_speed']
-    
-    def fetch_new_data(self):
-        print("Fetching weather data")
-        api_key = os.getenv('OPENWEATHERMAP_API_KEY')
-        lat = os.getenv('LAT')
-        lon = os.getenv('LON')
-        url = f"http://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={api_key}&units=imperial"
-        
-        try:
-            # Without a timeout, a connection that drops mid-request can block this thread forever
-            response = requests.get(url, timeout=10)
-        except requests.RequestException as e:
-            # requests includes the full URL in its errors; keep the API key out of the logs
-            message = str(e).replace(api_key, "<api key>") if api_key else str(e)
-            raise RuntimeError(f"weather request failed: {message}") from None
-
-        if response.status_code != 200:
-            # e.g. 429 rate limit or 5xx; the body is a short JSON error from OpenWeatherMap
-            raise RuntimeError(f"OpenWeatherMap returned HTTP {response.status_code}: {response.text[:200]}")
-        weather_data = response.json()
-        
-        icon = weather_data['weather'][0]['icon']
-        temp = round(weather_data['main']['temp'])
-        wind_speed = round(weather_data['wind']['speed'])
-        
-        data = {'icon': icon, 'temp': temp, 'wind_speed': wind_speed}
-        return data
+import bdf
+from components.base import ASCII, Component, Option, color_option, font_option, line_rows, rgba, widest_digits
+from components.openweathermap import compass, data_or_sample, icon, today_high_low
 
 
+class Weather(Component):
+    type = 'weather'
+    label = 'Weather'
+    description = 'Conditions, temperature (°F) and wind speed (mph)'
+    options = (
+        color_option(),
+        Option('show', 'Show', 'select', 'both', choices=[
+            ('both', 'Temperature and wind'),
+            ('temp', 'Temperature only'),
+        ]),
+    )
+
+    def size(self, opts, ctx):
+        return 32, 32 if opts['show'] == 'both' else 16
+
+    def draw(self, image, opts, ctx):
+        data, note = data_or_sample(ctx, 'weather')
+        if data is None:
+            return None  # nothing fetched yet: leave the area blank
+
+        color = rgba(opts['color'])
+        font = bdf.get_font('6x10')
+        small_font = bdf.get_font('5x8')
+        show_wind = opts['show'] == 'both'
+
+        mask = icon(data['icon'])
+        if mask is not None:
+            image.paste(color, (0, 0), mask)
+        if show_wind:
+            image.paste(color, (0, 16), icon('wind'))
+
+        # Same layout as before the management page; three-digit numbers get squeezed in
+        temp_font = font
+        x_temp, y_temp, x_wind, y_wind = 19, 12, 19, 27
+        if data['temp'] > 99:
+            temp_font = small_font
+            x_temp, y_temp = 16, 11
+        if data['wind_speed'] > 99:
+            x_wind, y_wind = 16, 26
+
+        temp = f" {data['temp']}" if int(data['temp']) < 10 else str(data['temp'])
+        temp_font.draw_at_baseline(image, x_temp, y_temp, temp, color)
+        if show_wind:
+            wind = f" {data['wind_speed']}" if int(data['wind_speed']) < 10 else str(data['wind_speed'])
+            temp_font.draw_at_baseline(image, x_wind, y_wind, wind, color)
+        return note
 
 
+class WeatherDetails(Component):
+    """One weather detail on a line: a short label on the left, the value on the right"""
+    type = 'weather_details'
+    label = 'Weather details'
+    description = 'Feels like, humidity, high/low, sunrise, sunset or wind'
+    options = (
+        Option('field', 'Show', 'select', 'feels_like', choices=[
+            ('feels_like', 'Feels like'),
+            ('humidity', 'Humidity'),
+            ('high_low', 'High / low today'),
+            ('sunrise', 'Sunrise'),
+            ('sunset', 'Sunset'),
+            ('wind', 'Wind speed and direction'),
+        ]),
+        Option('label', 'Label', 'bool', True),
+        Option('hours', 'Hours', 'select', '12', choices=[('12', '12-hour'), ('24', '24-hour')],
+               show_if={'field': ['sunrise', 'sunset']}),
+        color_option(),
+        font_option('5x7'),
+    )
+    LABELS = {'feels_like': 'Feels', 'humidity': 'Hum', 'high_low': 'H/L', 'sunrise': 'Rise', 'sunset': 'Set', 'wind': 'Wind'}
+    # The widest each value gets, so the box doesn't change size as the weather does
+    SAMPLES = {'feels_like': '00°', 'humidity': '100%', 'high_low': '00°/00°', 'sunrise': '00:00', 'sunset': '00:00', 'wind': '00 NW'}
+
+    def _layout(self, opts):
+        font = bdf.get_font(opts['font'])
+        label = self.LABELS[opts['field']] + ' ' if opts['label'] else ''
+        top, height = line_rows(font, ASCII + '°')
+        width = font.text_width(label) + font.text_width(widest_digits(font, self.SAMPLES[opts['field']]))
+        return font, label, top, height, width
+
+    def size(self, opts, ctx):
+        font, label, top, height, width = self._layout(opts)
+        return width, height
+
+    def value(self, field, weather, forecast, ctx, hours):
+        if field == 'high_low':
+            high_low = today_high_low(ctx, weather, forecast)
+            return f"{high_low[0]}°/{high_low[1]}°" if high_low else None
+        if weather is None:
+            return None
+        if field == 'feels_like':
+            return f"{weather['feels_like']}°"
+        if field == 'humidity':
+            return f"{weather['humidity']}%" if weather.get('humidity') is not None else None
+        if field in ('sunrise', 'sunset'):
+            if not weather.get(field):
+                return None
+            at = datetime.fromtimestamp(weather[field])
+            return f"{at.hour % 12 or 12}:{at.minute:02}" if hours == '12' else f"{at.hour:02}:{at.minute:02}"
+        if field == 'wind':
+            direction = weather.get('wind_deg')
+            return f"{weather['wind_speed']} {compass(direction)}" if direction is not None else str(weather['wind_speed'])
+        return None
+
+    def draw(self, image, opts, ctx):
+        font, label, top, height, width = self._layout(opts)
+        weather, note = data_or_sample(ctx, 'weather')
+        forecast = None
+        if opts['field'] == 'high_low':
+            forecast, forecast_note = data_or_sample(ctx, 'forecast')
+            note = note or forecast_note
+        value = self.value(opts['field'], weather, forecast, ctx, opts['hours'])
+        if value is None:
+            return note
+        color = rgba(opts['color'])
+        font.draw(image, 0, -top, label, color)
+        font.draw(image, width - font.text_width(value), -top, value, color)
+        return note
