@@ -5,8 +5,9 @@ changes color through sunrise, day, sunset and night, the sun sets behind the hi
 moon shows its actual phase, stars twinkle, and clouds, rain, snow, fog and lightning come
 and go with the weather. Each theme adds its own life: petals drifting off a cherry tree,
 ripples and a cabin's chimney smoke on a mountain lake, a city's windows lighting up, a
-waterfall with a rainbow in its spray and the northern lights above it. The
-prebuilt screens in screens.py put a clock and the temperature on top.
+waterfall with a rainbow in its spray and the northern lights above it, and another fanning
+down a hillside where sheep graze. The prebuilt screens in prebuilt.py put a clock and the
+temperature on top.
 
 Everything moves with the clock (ctx.now), not a frame counter, so the editor and the
 display agree on what a moment looks like. The parts that barely change (sky, scenery,
@@ -33,9 +34,9 @@ def mix(a, b, t):
     return tuple(int(round(x + (y - x) * t)) for x, y in zip(a, b))
 
 
-def scale(color, factors):
-    """color with each channel multiplied, e.g. by the light falling on it"""
-    return tuple(int(clamp(c * f, 0, 255)) for c, f in zip(color, factors))
+def lit(color, light):
+    """color under light (see ambient): each channel multiplied, then a little added"""
+    return tuple(int(clamp(c * f + a, 0, 255)) for c, f, a in zip(color, light[:3], light[3:]))
 
 
 def hash01(*args):
@@ -189,19 +190,23 @@ class Env:
         self.light = ambient(self.s, self.gloom)                  # for things drawn each frame
 
 
+# Night is told by color more than by darkness: an LED barely lights below about 40 of 255,
+# so near-black skies and scenery just look switched off. After dark the sky is a deep but
+# glowing blue, and the scenery is moonlit (dimmer, bluer, and lifted so its shadows stay
+# visible) rather than black.
 SKY = [  # (sun phase, (top r, g, b, horizon r, g, b))
-    (-1.0, (0, 0, 8, 6, 8, 30)),
-    (-0.45, (6, 4, 30, 64, 26, 74)),
+    (-1.0, (8, 14, 66, 40, 46, 136)),
+    (-0.45, (26, 20, 104, 136, 58, 136)),
     (0.0, (28, 30, 96, 214, 96, 52)),
     (0.45, (34, 92, 186, 214, 178, 150)),
     (1.0, (24, 104, 212, 136, 194, 240)),
 ]
-AMBIENT = [  # (sun phase, light on the scenery as r, g, b multipliers)
-    (-1.0, (0.22, 0.25, 0.44)),
-    (-0.45, (0.4, 0.34, 0.56)),
-    (0.0, (1.0, 0.78, 0.66)),
-    (0.45, (1.0, 0.95, 0.9)),
-    (1.0, (1.0, 1.0, 1.0)),
+AMBIENT = [  # (sun phase, light on the scenery: r, g, b multipliers, then r, g, b added)
+    (-1.0, (0.42, 0.5, 0.8, 8, 14, 38)),
+    (-0.45, (0.56, 0.48, 0.74, 12, 8, 30)),
+    (0.0, (1.0, 0.78, 0.66, 0, 0, 0)),
+    (0.45, (1.0, 0.95, 0.9, 0, 0, 0)),
+    (1.0, (1.0, 1.0, 1.0, 0, 0, 0)),
 ]
 
 
@@ -210,18 +215,22 @@ def sky_colors(s, gloom):
     v = keyframes(SKY, s)
     top, horizon = v[:3], v[3:]
     if gloom:
+        cool = clamp(-s)  # an overcast night is slate blue, not gray, so it still shows
+
         def gray(c, keep):
             level = sum(c) / 3 * keep
-            return mix(c, (level, level, level * 1.1), gloom)
+            return mix(c, (level * (1 - 0.3 * cool), level * (1 - 0.1 * cool), level * (1.1 + 0.6 * cool)), gloom)
         top, horizon = gray(top, 0.9), gray(horizon, 0.75 - 0.25 * gloom)
     return tuple(map(int, top)), tuple(map(int, horizon))
 
 
 def ambient(s, gloom):
+    """The light on the scenery, for lit(): dimmer and grayer in bad weather"""
     light = keyframes(AMBIENT, s)
+    factors, added = light[:3], light[3:]
     dim = 1 - 0.35 * gloom
-    level = sum(light) / 3
-    return tuple((c + (level - c) * gloom * 0.6) * dim for c in light)
+    level = sum(factors) / 3
+    return tuple((c + (level - c) * gloom * 0.6) * dim for c in factors) + tuple(a * dim for a in added)
 
 
 # ---------- Themes ----------
@@ -470,7 +479,7 @@ class Lake(Theme):
         if env.temp > 55 or env.condition in ('rain', 'storm'):
             return
         cx, cy = lay.chimney
-        color = mix((150, 150, 160), (40, 40, 52), env.night)
+        color = mix((150, 150, 160), (96, 104, 158), env.night)  # moonlit after dark
         for i in range(5):
             age = (env.t * 0.9 + i / 5) % 1
             y = cy - 1 - age * 7
@@ -555,6 +564,25 @@ class City(Theme):
             px.add(x, y + 1, (255, 40, 30), 0.2)
 
 
+def draw_aurora(px, sky, env, lay, body):
+    """The northern lights across the top of the sky, on clear nights; brighter some nights
+    than others"""
+    strength = env.night * clamp(1 - env.clouds * 1.4) * (0.55 + 0.45 * hash01(int(env.t // 86400), 95))
+    if strength < 0.05:
+        return
+    bx, by = body[:2] if body else (-99, -99)
+    for x in range(lay.w):
+        edge = 4.5 + 1.6 * math.sin(x * 0.13 + env.t * 0.21) + (noise(x + env.t * 0.6, 0, 7, 96) - 0.5) * 3
+        ray = 0.3 + 0.7 * noise(x * 1.3 + env.t * 1.1, 0, 2.2, 97)
+        for y in range(min(lay.h, int(edge) + 2)):
+            if not sky[x, y] or (abs(x - bx) <= 4 and abs(y - by) <= 4):
+                continue
+            above = edge - y
+            glow = ray * (math.exp(-above / 3.5) if above >= 0 else 0.45)
+            color = mix((24, 255, 60), (150, 70, 220), clamp(above / 7))  # green, even added to a blue sky
+            px.add(x, y, color, glow * strength * 1.15)
+
+
 class Skogafoss(Theme):
     """Iceland's Skógafoss: a curtain of water falling off a mossy basalt cliff into a cloud
     of spray. A rainbow hangs in the mist on sunny days, the northern lights dance on clear
@@ -635,21 +663,7 @@ class Skogafoss(Theme):
         return lay
 
     def sky(self, px, sky, env, lay, body):
-        """The northern lights, on clear nights; brighter some nights than others"""
-        strength = env.night * clamp(1 - env.clouds * 1.4) * (0.55 + 0.45 * hash01(int(env.t // 86400), 95))
-        if strength < 0.05:
-            return
-        bx, by = body[:2] if body else (-99, -99)
-        for x in range(lay.w):
-            edge = 4.5 + 1.6 * math.sin(x * 0.13 + env.t * 0.21) + (noise(x + env.t * 0.6, 0, 7, 96) - 0.5) * 3
-            ray = 0.3 + 0.7 * noise(x * 1.3 + env.t * 1.1, 0, 2.2, 97)
-            for y in range(min(lay.h, int(edge) + 2)):
-                if not sky[x, y] or (abs(x - bx) <= 4 and abs(y - by) <= 4):
-                    continue
-                above = edge - y
-                glow = ray * (math.exp(-above / 3.5) if above >= 0 else 0.45)
-                color = mix((40, 255, 150), (150, 70, 220), clamp(above / 7))
-                px.add(x, y, color, glow * strength * 1.15)
+        draw_aurora(px, sky, env, lay, body)
 
     def animate(self, px, env, lay):
         x0, x1, lip, base = lay.falls
@@ -657,7 +671,7 @@ class Skogafoss(Theme):
         cx = (x0 + x1) / 2
 
         # The falling water
-        dark, bright = scale((70, 100, 128), light), scale((234, 242, 252), light)
+        dark, bright = lit((70, 100, 128), light), lit((234, 242, 252), light)
         scroll = env.t * 14
         sparkle = int(env.t * 8)
         for i, column in enumerate(lay.texture):
@@ -672,19 +686,19 @@ class Skogafoss(Theme):
                 px.put(x, y, mix(dark, bright, v))
 
         # Churning foam in the pool, and the river running off it
-        foam, pool = scale((240, 244, 250), light), scale((110, 146, 172), light)
+        foam, pool = lit((240, 244, 250), light), lit((110, 146, 172), light)
         for y in range(base, base + 3):
             spread = (x1 - x0) / 2 + 2 + (y - base)
             for x in range(int(cx - spread), int(cx + spread) + 1):
                 v = noise(x * 1.2 + math.sin(env.t * 2 + y) * 1.5, y * 2 + env.t * 1.5, 2, 109)
                 px.put(x, y, mix(pool, foam, clamp(v * 1.3 - 0.1)))
-        highlight = scale((170, 206, 228), light)
+        highlight = lit((170, 206, 228), light)
         for x, y in lay.river:
             if y >= base + 3 and noise(x * 0.8, y * 2 - env.t * 5, 2.5, 110) > 0.62:
                 px.put(x, y, highlight, 0.8)
 
         # Spray rising off the pool
-        mist = scale((214, 222, 232), light)
+        mist = lit((214, 222, 232), light)
         for y in range(base - 6, base + 2):
             for x in range(int(cx - 8), int(cx + 9)):
                 d = math.hypot((x - cx) / 9, (y - base) / 6)
@@ -712,7 +726,246 @@ class Skogafoss(Theme):
                         px.put(*spot, color, 0.38 * strength)
 
 
-THEMES = {theme.name: theme for theme in (Blossom(), Lake(), City(), Skogafoss())}
+class Dynjandi(Theme):
+    """Iceland's Dynjandi, in the Westfjords: a fan of water spreading down a stairway of
+    basalt layers, with smaller falls below it stepping down to the fjord. Sheep graze the
+    grassy ledges and fulmars wheel overhead by day; after dark a camper van's window glows
+    by the shore, and the northern lights come out on clear nights."""
+    name = 'dynjandi'
+    label = 'Dynjandi'
+
+    VAN = ['.wwwww.', 'wgwwgww', 'sssssss', '.k...k.']
+    PERIOD = 16  # rows before the flowing water's pattern repeats
+    WATER = ((92, 122, 150), (238, 244, 252))  # in shadow, and foaming white
+    # The falls below the main one, top to bottom: (how far down, kind, half width)
+    STEPS = ((0.0, 'pool', 5.5), (0.17, 'run', 2), (0.34, 'fall', 1.5), (0.67, 'pool', 2.5), (0.84, 'fall', 1.5))
+
+    def build(self, w, h):
+        lay = Layout(w, h)
+        px = Pixels(lay.scenery)
+        sx, sy = w / 64, h / 32
+        water = h - int(round(4 * sy))   # the fjord
+        shore = water - int(round(2 * sy))
+        lip, foot = int(8 * sy), int(21 * sy)
+        cx = 46 * sx
+        lay.water = water
+        lay.horizon = int(12 * sy)
+        lay.surface = [water] * w
+        wet = set()  # water and wet rock, where sheep don't go
+
+        def layer(x, y):
+            """Which basalt layer (x, y) is in, and how far down it, 0 to 1. The layers are
+            about 3 rows thick and nearly level, as all through the Westfjords."""
+            band = (y / sy + (noise(x / sx, 5, 16, 123) - 0.5)) / 3
+            return math.floor(band), band - math.floor(band)
+
+        def ridge(x):
+            u = x / sx
+            if abs(u - 46) <= 2.5:
+                return lip  # the notch the river has worn at the top
+            r = 7 - 2 * clamp((u - 50) / 14) if u >= 30 else 7 + (30 - u) * 0.42
+            return int(round((r + (noise(u, 0, 3, 121) - 0.5) * 1.6) * sy))
+
+        # Across the fjord, a flat-topped mountain, hazy with distance and snow in its gullies
+        for x in range(w):
+            u = x / sx
+            top = (11 + max(0.0, u - 18) * 0.75 + (noise(u, 0, 4, 120) - 0.5)) * sy
+            for y in range(int(round(top)), shore):
+                color = (132, 146, 168) if layer(x, y * 0.8)[1] < 0.2 else (110, 126, 150)
+                if y - top < 2.5 * sy and noise(u * 2, y / sy, 2, 125) > 0.62:
+                    color = (214, 222, 236)
+                px.put(x, y, color)
+
+        # The near hills: grassy slopes, with the edge of each basalt layer showing as a band of
+        # dark cliff here and there (fewer low down, where the slope is gentler)
+        lay.grass = []
+        tops = [ridge(x) for x in range(w)]
+        for x in range(w):
+            u = x / sx
+            for y in range(tops[x], shore):
+                low = clamp((y / sy - 18) / 6)
+                band, depth = layer(x, y)
+                cliff = depth >= 0.6 + 0.3 * low and noise(u, band * 5, 14, 122) > 0.25 + 0.3 * low
+                if y > tops[x] and cliff:
+                    color = mix((48, 42, 44), (86, 78, 74), noise(u * 1.8, y / sy * 0.4, 2, 124))
+                else:
+                    color = mix((60, 106, 48), (98, 146, 64), noise(u * 0.9, y / sy * 1.4, 3, 128))
+                    if hash01(x, y, 132) < 0.12:
+                        color = (104, 112, 64)  # heather and stones in the grass
+                    if y > tops[x]:
+                        lay.grass.append((x, y))
+                px.put(x, y, color)
+        for x in range(w):  # the shore: black gravel and grass, then the fjord
+            for y in range(shore, water):
+                px.put(x, y, (70, 116, 54) if hash01(x, y, 130) < 0.35 else mix((70, 66, 64), (106, 100, 94), hash01(x, y, 131)))
+            for y in range(water, h):
+                px.put(x, y, (0, 0, 0))  # filled in from the reflection
+
+        # The main fall fans out as it comes down, spreading and foaming at each layer's ledge;
+        # lower down, dark rock shows between the streams toward its sides
+        lay.fan = []
+        for y in range(lip, foot + 1):
+            t = (y - lip) / (foot - lip)
+            mid = cx - 1.2 * sx * t
+            half = (3 + 7 * t ** 0.8 + 0.8 * (layer(mid, y)[1] < 0.34) + (noise(y / sy, 0, 1.5, 126) - 0.5)) * sx
+            x_low, x_high = int(round(mid - half)), int(round(mid + half))
+            for x in range(x_low - 1, x_high + 2):
+                px.put(x, y, (34, 36, 44))
+                wet.add((x, y))
+            for x in range(x_low, x_high + 1):
+                ledge = layer(x, y + (hash01(x, 151) < 0.4) * sy)[1] < 0.34  # staggered, like lace
+                if (not ledge and t > 0.55 and abs(x - mid) > 0.6 * half and x_low < x < x_high
+                        and noise(x / sx * 1.8, y / sy * 0.5, 1.6, 127) < 0.15 + 0.15 * t):
+                    continue
+                shade = 0.4 + 0.3 * (noise(x / sx, 0, 1.4, 106) - 0.5)
+                lay.fan.append((x, y, ledge, shade))
+                px.put(x, y, mix(*self.WATER, 0.85 if ledge else shade))
+
+        # The smaller falls below it, with pools between, running into the fjord
+        lay.cascades = []
+        for y in range(foot + 1, water):
+            u = (y - foot - 1) / max(1, water - foot - 2)
+            kind, half = next((k, hw) for start, k, hw in reversed(self.STEPS) if u >= start)
+            mid = cx - 1.2 * sx - 5 * sx * u
+            x_low, x_high = int(round(mid - half * sx)), int(round(mid + half * sx))
+            for x in range(x_low - 1, x_high + 2):
+                px.put(x, y, (40, 42, 48))
+                wet.add((x, y))
+            for x in range(x_low, x_high + 1):
+                lay.cascades.append((x, y, kind))
+                px.put(x, y, mix(*self.WATER, 0.8 if kind == 'fall' else 0.45))
+        lay.foot = (cx - 1.2 * sx, foot)
+        lay.mist = []
+        for y in range(foot - int(5 * sy), foot + int(3 * sy)):
+            for x in range(int(cx - 14 * sx), int(cx + 13 * sx)):
+                d = math.hypot((x - lay.foot[0]) / (13 * sx), (y - foot) / (5 * sy))
+                if d < 1:
+                    lay.mist.append((x, y, 0.14 * (1 - d)))
+
+        # Flowing water's pattern for every column, seamless every PERIOD rows
+        lay.texture = []
+        for x in range(w):
+            column = []
+            for y in range(self.PERIOD):
+                t = y / self.PERIOD
+                column.append(noise(x * 1.7, y, 4, 107) * (1 - t) + noise(x * 1.7, y - self.PERIOD, 4, 107) * t)
+            lay.texture.append(column)
+
+        van_x = int(51 * sx)
+        draw_map(px, van_x, water - 4, self.VAN, {'w': (228, 226, 216), 'g': (54, 70, 90), 's': (44, 140, 150), 'k': (28, 28, 32)})
+        lay.lights.append((van_x + 4, water - 3, (255, 190, 100), True))
+
+        # Sheep, on ledges right of where the time goes, away from the water and the van
+        grass = set(lay.grass)
+
+        def ground(x, y):
+            return (x, y) in grass and y - 1 > tops[x] and (x, y - 1) not in wet
+
+        def free(x, y):
+            u, v = x / sx, y / sy
+            under_text = (u < 39 and v < 17) or (u < 24 and v < 24)  # the prebuilt screen's time and temperature
+            return (not under_text and y < shore - 1 and not (van_x - 2 <= x <= van_x + 8 and y >= water - 6)
+                    and not any((x + dx, y - dy) in wet for dx in range(-3, 4) for dy in (0, 1)))
+
+        lay.sheep = []
+        for _, x, y in sorted((hash01(x, y, 140), x, y) for x, y in lay.grass if ground(x, y) and free(x, y)):
+            if len(lay.sheep) >= round(5 * sx):
+                break
+            if any(abs(x - (a + b) / 2) < 6 * sx and abs(y - 1 - row) < 3 for a, b, row in lay.sheep):
+                continue
+            left = right = x
+            while ground(left - 1, y) and free(left - 1, y) and x - left < 4:
+                left -= 1
+            while ground(right + 1, y) and free(right + 1, y) and right - x < 4:
+                right += 1
+            if right - left >= 4:
+                lay.sheep.append((left + 1, right - 2, y - 1))  # where its body can be, and its row
+
+        lay.sun = (int(58 * sx), int(3 * sy), int(11 * sy))
+        return lay
+
+    def frozen(self, lay):
+        """Snow on the skyline and on every ledge, so the layers show as white stripes"""
+        out = snow_cover(lay.scenery, lay.water)
+        px = out.load()
+        for x, y in lay.grass:
+            if noise(x, y, 3, 150) > 0.22:  # all but a few patches
+                px[x, y] = (*mix(px[x, y][:3], (225, 232, 245), 0.8), 255)
+        return out
+
+    def sky(self, px, sky, env, lay, body):
+        draw_aurora(px, sky, env, lay, body)
+
+    def animate(self, px, env, lay):
+        light = env.light
+        dark, bright = lit(self.WATER[0], light), lit(self.WATER[1], light)
+        scroll = env.t * 7  # slower than a free fall: it's sliding down the rock
+        tick = int(env.t * 8)
+        texture = lay.texture
+        for x, y, ledge, shade in lay.fan:
+            if ledge:
+                v = 0.78 + 0.22 * hash01(x, y, tick, 131)
+            elif hash01(x, y, tick, 132) < 0.04:
+                v = 1
+            else:
+                v = shade + 0.65 * (texture[x][int(y - scroll) % self.PERIOD] - 0.5)
+            px.put(x, y, mix(dark, bright, clamp(v)))
+        for x, y, kind in lay.cascades:
+            if kind == 'fall':
+                v = 0.75 + 0.25 * hash01(x, y, tick, 133)
+            elif kind == 'pool':
+                v = 0.3 + 0.55 * noise(x * 1.3 + math.sin(env.t * 2 + y) * 1.2, y * 2 + env.t * 1.2, 2, 134)
+            else:
+                v = 0.3 + 0.5 * texture[x][int(y * 2 - scroll * 1.5) % self.PERIOD]
+            px.put(x, y, mix(dark, bright, clamp(v)))
+
+        # Spray at the foot of the main fall, some of it drifting up
+        mist = lit((214, 222, 232), light)
+        for x, y, amount in lay.mist:
+            px.add(x, y, mist, amount)
+        fx, fy = lay.foot
+        for i in range(8):
+            phase = env.t * 0.3 + hash01(i, 135)
+            cycle, age = math.floor(phase), phase - math.floor(phase)
+            x = fx + (hash01(i, cycle, 136) - 0.5) * 20 * lay.w / 64 + age * (1 + env.wind * 3)
+            px.put(x, fy + 1 - age * 7, mist, 0.5 * (1 - age) * clamp(age * 4))
+
+        self.sheep(px, env, lay)
+        if env.night < 0.4 and env.condition in ('clear', 'clouds'):
+            self.fulmars(px, env, lay)
+
+    def sheep(self, px, env, lay):
+        """Each wanders its ledge, stopping to graze; at night they settle down and stay put"""
+        for i, (x_low, x_high, y) in enumerate(lay.sheep):
+            period = 25 + 25 * hash01(i, 141)
+            n = noise(env.t / period, i * 7, 1, 145)
+            ahead = noise((env.t + 2) / period, i * 7, 1, 145) - n
+            roam = (n - 0.5) * 1.6 * (1 - env.night)
+            x = int(round(x_low + (x_high - x_low) * clamp(0.5 + roam)))
+            facing = 1 if ahead > 0 else -1
+            grazing = abs(ahead) * (x_high - x_low) < 0.25 and math.sin(env.t * 0.9 + i * 2) < 0.6
+            dark = hash01(i, 146) < 0.25  # one in four is black or brown
+            body = lit((84, 66, 54) if dark else (232, 230, 220), env.light)
+            head = lit((34, 30, 30), env.light)
+            px.put(x, y, body)
+            px.put(x + 1, y, body)
+            px.put(x + 2 if facing > 0 else x - 1, y + grazing, head)
+
+    def fulmars(self, px, env, lay):
+        """Two seabirds gliding in loops over the falls, flapping now and then"""
+        color = lit((48, 50, 60), env.light)
+        fade = 1 - env.night / 0.4
+        for i in range(2):
+            a = env.t * (0.3 + 0.07 * i) + i * 2.6
+            x = round(lay.w * (0.7 + 0.16 * math.cos(a)))
+            y = round(lay.h * (0.15 + 0.05 * math.sin(2 * a)))
+            up = (env.t * 2.5 + i * 0.37) % 1 < 0.3
+            px.put(x, y, color, fade)
+            px.put(x - 1, y - up, color, fade)
+            px.put(x + 1, y - up, color, fade)
+
+
+THEMES = {theme.name: theme for theme in (Blossom(), Lake(), City(), Skogafoss(), Dynjandi())}
 
 
 # ---------- Sky and weather ----------
@@ -730,7 +983,7 @@ def draw_sky(image, top, horizon, horizon_y):
 def draw_moon(px, cx, cy, phase, brightness):
     r = 3
     lit_color = mix((0, 0, 0), (236, 232, 200), brightness)
-    dark_color = mix((0, 0, 0), (26, 28, 44), brightness)
+    dark_color = mix((0, 0, 0), (34, 38, 72), brightness)
     for dy in range(-r, r + 1):
         half = math.sqrt(max(0, (r + 0.4) ** 2 - dy * dy))
         terminator = half * math.cos(2 * math.pi * phase)
@@ -804,12 +1057,13 @@ def cloud_sprite(seed, width, height, lit, shade):
 
 
 def cloud_colors(s, gloom):
-    lit = keyframes([(-1, (30, 30, 42)), (-0.45, (70, 44, 80)), (0, (236, 140, 110)), (0.45, (240, 226, 214)),
+    # Moonlit at night: lighter than the sky around them, so they show
+    top = keyframes([(-1, (92, 100, 156)), (-0.45, (150, 92, 156)), (0, (236, 140, 110)), (0.45, (240, 226, 214)),
                      (1, (236, 240, 248))], s)
-    shade = keyframes([(-1, (14, 14, 22)), (-0.45, (36, 24, 50)), (0, (120, 60, 80)), (0.45, (164, 156, 170)),
+    shade = keyframes([(-1, (48, 54, 104)), (-0.45, (78, 50, 112)), (0, (120, 60, 80)), (0.45, (164, 156, 170)),
                        (1, (156, 168, 192))], s)
     dark = 1 - 0.45 * gloom
-    return tuple(int(c * dark) for c in lit), tuple(int(c * dark) for c in shade)
+    return tuple(int(c * dark) for c in top), tuple(int(c * dark) for c in shade)
 
 
 _clouds = {}
@@ -938,7 +1192,7 @@ def draw_fog(image, env, w, h):
 
     mist = ImageChops.add(window(slow, env.t * 1.2), window(fast, -env.t * 0.7 + w), scale=2)
     mist = ImageChops.multiply(mist.point(lambda v: int(255 * clamp((v / 255 - 0.3) * 2))), weight)
-    color = mix((24, 24, 30), (196, 202, 210), clamp((env.s + 1) / 1.6))
+    color = mix((66, 74, 120), (196, 202, 210), clamp((env.s + 1) / 1.6))  # blue-gray mist at night
     image.paste((*color, 255), (0, 0), mist)
 
 
@@ -1029,7 +1283,7 @@ def base_for(theme, lay, env):
     scenery = theme.frozen(lay) if env.condition == 'snow' else lay.scenery
     r, g, b, a = scenery.split()
     light = ambient(s, env.gloom)
-    r, g, b = (band.point(lambda v, f=f: int(v * f)) for band, f in zip((r, g, b), light))
+    r, g, b = (band.point(lambda v, f=f, a=a: min(255, int(v * f + a))) for band, f, a in zip((r, g, b), light[:3], light[3:]))
     image.alpha_composite(Image.merge('RGBA', (r, g, b, a)))
     if lay.water is not None:
         reflect(image, lay)

@@ -54,6 +54,17 @@ PREBUILT = [
              'options': {'show': 'temperature', 'align': 'right', 'font': '6x10', 'color': '#c8f0ff', 'outline': True}},
         ],
     },
+    {
+        'id': 'dynjandi',
+        'name': 'Dynjandi',
+        'description': "The time and temperature by the Westfjords' great fan of a waterfall, with sheep on its ledges by day and the northern lights at night",
+        'widgets': [
+            {'type': 'scene', 'x': 0, 'y': 0, 'options': {'theme': 'dynjandi'}},
+            {'type': 'time', 'x': 1, 'y': 1, 'options': {'font': '7x13B', 'color': '#ffffff', 'outline': True}},
+            {'type': 'weather', 'x': 1, 'y': 14,
+             'options': {'show': 'temperature', 'font': '5x7', 'color': '#c6f0d2', 'outline': True}},
+        ],
+    },
 ]
 
 

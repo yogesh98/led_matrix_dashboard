@@ -124,6 +124,8 @@ def main():
         ('city.gif', 'city', DAY.replace(hour=21, minute=30), weather('01n', 51)),
         ('skogafoss.gif', 'skogafoss', DAY.replace(hour=13, minute=10), weather('01d', 48)),
         ('skogafoss-night.gif', 'skogafoss', DAY.replace(hour=22, minute=15), weather('01n', 34)),
+        ('dynjandi.gif', 'dynjandi', DAY.replace(hour=11, minute=5), weather('01d', 46)),
+        ('dynjandi-night.gif', 'dynjandi', DAY.replace(hour=22, minute=40), weather('01n', 30)),
     ):
         save_gif(name, *clip(screen_id, start, data))
 
@@ -139,17 +141,17 @@ def main():
                    [caption for *_, caption in panels]) for k in range(4 * fps)]
     save_gif('weather.gif', frames, round(1000 / fps))
 
-    # A day, from before sunrise to late at night
-    ids = ['blossom', 'lake', 'city', 'skogafoss']
+    # A day, from before sunrise to late at night, in four of the scenes (a 2x2 grid)
     start, steps = DAY.replace(hour=5, minute=30), 76
     frames = []
     for k in range(steps):
         now = start + timedelta(minutes=15 * k)
-        frames.append(grid([frame(s, now, weather('01d', 60)) for s in ids], 4, 2))
+        frames.append(grid([frame(s, now, weather('01d', 60)) for s in ('blossom', 'lake', 'city', 'skogafoss')], 4, 2))
     frames += [frames[-1]] * 8  # rest on the night before it starts again
     save_gif('day.gif', frames, 110)
 
     # Every scene in every kind of weather, as one picture
+    ids = list(SCREENS)
     columns = [
         ('Clear day', DAY.replace(hour=12, minute=41, second=3), '01d', 72),
         ('Sunset', DAY.replace(hour=17, minute=0, second=3), '02d', 64),

@@ -50,21 +50,33 @@ class SceneTest(unittest.TestCase):
         self.assertEqual(a.tobytes(), b.tobytes())
 
     def test_it_moves(self):
-        for theme, icon in (('blossom', '01d'), ('lake', '01d'), ('city', '10d'), ('skogafoss', '04d')):
+        for theme, icon in (('blossom', '01d'), ('lake', '01d'), ('city', '10d'), ('skogafoss', '04d'), ('dynjandi', '04d')):
             a = draw(scene(theme=theme), NOON, weather(icon))
             b = draw(scene(theme=theme), NOON + timedelta(seconds=1.5), weather(icon))
             self.assertNotEqual(a.tobytes(), b.tobytes(), theme)
 
     def test_night_is_darker_than_day(self):
         for theme in THEMES:
-            self.assertLess(brightness(draw(scene(theme=theme), MIDNIGHT)), brightness(draw(scene(theme=theme), NOON)) * 0.6)
+            self.assertLess(brightness(draw(scene(theme=theme), MIDNIGHT)), brightness(draw(scene(theme=theme), NOON)) * 0.7)
+
+    def test_night_still_shows_on_leds(self):
+        # An LED barely lights below about 40 of 255, so night is told by color (bluer)
+        # rather than by going black
+        for theme in THEMES:
+            for icon in ('01n', '04n', '10n', '13n'):
+                night = draw(scene(theme=theme), MIDNIGHT, weather(icon)).convert('RGB')
+                pixels = list(night.getdata())
+                unlit = sum(1 for p in pixels if max(p) < 40)
+                self.assertLess(unlit, len(pixels) * 0.05, (theme, icon))
+                r, g, b = (sum(p[i] for p in pixels) / len(pixels) for i in range(3))
+                self.assertGreater(b, max(r, g) * 1.3, (theme, icon))
 
     def test_city_windows_light_up_at_night(self):
         night = draw(scene(theme='city', weather='01'), MIDNIGHT).convert('RGB')
         warm = sum(1 for r, g, b in night.getdata() if r > 200 and g > 140 and b < 140)
         self.assertGreater(warm, 15)
 
-    def test_skogafoss_rainbow_and_northern_lights(self):
+    def test_skogafoss_rainbow(self):
         def colorful(image):
             # How saturated the spray to the left of the falls is, where the rainbow hangs
             return sum(max(p[:3]) - min(p[:3]) for p in image.crop((18, 18, 30, 26)).getdata())
@@ -72,12 +84,21 @@ class SceneTest(unittest.TestCase):
         sunny = draw(scene(theme='skogafoss', weather='01', time='1'))
         grey = draw(scene(theme='skogafoss', weather='03', time='1'))
         self.assertGreater(colorful(sunny), colorful(grey) * 1.3)
-        clear_night = draw(scene(theme='skogafoss', weather='01', time='-1')).convert('RGB')
-        cloudy_night = draw(scene(theme='skogafoss', weather='10', time='-1')).convert('RGB')
+
+    def test_northern_lights_in_iceland(self):
         # The aurora is green: green well above red and blue, unlike moonlit clouds and sky
         green = lambda image: sum(max(0, g - max(r, b)) for r, g, b in image.crop((0, 0, 64, 8)).getdata())
-        self.assertGreater(green(clear_night), 200)
-        self.assertGreater(green(clear_night), green(cloudy_night) * 3)
+        for theme in ('skogafoss', 'dynjandi'):
+            clear_night = draw(scene(theme=theme, weather='01', time='-1')).convert('RGB')
+            cloudy_night = draw(scene(theme=theme, weather='10', time='-1')).convert('RGB')
+            self.assertGreater(green(clear_night), 200, theme)
+            self.assertGreater(green(clear_night), green(cloudy_night) * 3, theme)
+
+    def test_dynjandi_fans_out(self):
+        # Its famous shape: the falls are much wider at the foot than at the top
+        image = draw(scene(theme='dynjandi', weather='01', time='1')).convert('RGB')
+        white = lambda rows: sum(1 for y in rows for x in range(28, 64) if min(image.getpixel((x, y))) > 150)
+        self.assertGreater(white(range(19, 22)), white(range(9, 12)) * 1.6)
 
     def test_weather_and_time_can_be_fixed(self):
         fixed = scene(theme='lake', weather='13', time='-1')

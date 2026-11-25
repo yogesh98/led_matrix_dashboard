@@ -10,7 +10,7 @@ Every picture here was drawn by the same code that drives the LEDs (`docs/render
 
 ## Scenes
 
-Four prebuilt screens put the time and temperature over an animated scene. Add one from the + next to Screens on the management page, which shows them all live.
+Five prebuilt screens put the time and temperature over an animated scene. Add one from the + next to Screens on the management page, which shows them all live.
 
 <table>
   <tr>
@@ -29,6 +29,13 @@ Four prebuilt screens put the time and temperature over an animated scene. Add o
     <td><b>City skyline</b>: a skyline by a river. Windows light up one by one as it gets dark, change through the night, and wobble in the water. A warning light blinks on the tallest tower.</td>
     <td><b>Skógafoss</b>: Iceland's great waterfall, with spray rising from the pool and a tent glowing by the river. A rainbow hangs in the mist on sunny days, and the northern lights come out on clear nights. This is the screen a new display starts with.</td>
   </tr>
+  <tr>
+    <td><img src="docs/dynjandi.gif" alt="Dynjandi by day: a fan of white water spreading down green, cliff-banded slopes, with smaller falls below running into the fjord"></td>
+    <td><img src="docs/dynjandi-night.gif" alt="Dynjandi at night under the northern lights, the falls glowing blue in the moonlight and a camper van's window lit by the shore"></td>
+  </tr>
+  <tr>
+    <td colspan="2"><b>Dynjandi</b>: the Westfjords' great waterfall, a fan of water that spreads wider at every ledge of the basalt layers it pours down, with smaller falls below it stepping down to the fjord. Sheep wander the slopes and stop to graze, and fulmars wheel overhead by day. After dark the sheep settle down, a camper van's window glows by the shore, and the northern lights come out on clear nights.</td>
+  </tr>
 </table>
 
 ### They follow the weather
@@ -43,7 +50,7 @@ Scenes use the same OpenWeatherMap data as the Weather component, checked every 
 - **Clouds**: a few drifting clouds, up to a gray overcast sky
 - **Rain**: falling streaks that splash where they land, heavier for steady rain than for showers
 - **Thunderstorm**: heavy rain and flashes of lightning
-- **Snow**: drifting flakes, and snow settling on rooftops, the torii, the tree and the peaks
+- **Snow**: drifting flakes, and snow settling on rooftops, the torii, the tree, the peaks and every ledge of Dynjandi's hillside
 - **Fog**: mist rolling across the lower half
 
 Wind speed pushes the clouds, petals, smoke and rain along.
@@ -51,14 +58,14 @@ Wind speed pushes the clouds, petals, smoke and rain along.
 ### And the time of day
 
 <p align="center">
-  <img src="docs/day.gif" width="560" alt="A time-lapse of all four scenes from before sunrise to late at night">
+  <img src="docs/day.gif" width="560" alt="A time-lapse of four of the scenes from before sunrise to late at night">
 </p>
 
 The sky goes from night to sunrise, day, sunset and dusk, timed by today's sunrise and sunset where you live. The sun sinks behind the scenery, the moon rises, and lanterns and windows come on as it gets dark.
 
 ### Every scene, every sky
 
-![Each of the four scenes on a clear day, at sunset, at night, in the rain and in the snow](docs/gallery.png)
+![Each of the five scenes on a clear day, at sunset, at night, in the rain and in the snow](docs/gallery.png)
 
 ## Managing the display
 
